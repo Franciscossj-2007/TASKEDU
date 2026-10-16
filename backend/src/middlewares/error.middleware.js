@@ -5,6 +5,7 @@ import { env } from '../config/env.js';
  * Ruta no encontrada.
  */
 export const notFound = (req, res, next) => {
+  // Genera un 404 que el errorHandler convertirá en JSON.
   next(ApiError.notFound(`Ruta no encontrada: ${req.method} ${req.originalUrl}`));
 };
 
@@ -38,17 +39,21 @@ export const errorHandler = (err, req, res, next) => {
     });
   }
 
+  // Error controlado lanzado por la propia aplicación: se responde con su código y mensaje.
   if (err instanceof ApiError) {
     return res.status(err.status).json({
       error: err.message,
+      // Solo incluye "detalles" si existen.
       ...(err.details ? { detalles: err.details } : {}),
     });
   }
 
+  // Error inesperado: se registra en consola (salvo en pruebas).
   if (env.nodeEnv !== 'test') {
     console.error('Error no controlado:', err);
   }
 
+  // Al cliente se le da un mensaje genérico para no filtrar información interna.
   return res.status(500).json({
     error: 'Error interno del servidor',
     mensaje: 'Ocurrio un error inesperado',

@@ -1,21 +1,24 @@
 import { query } from '../config/database.js';
 
+// Columnas estándar de un curso.
 const CAMPOS = 'id, usuario_id, nombre, docente, descripcion, creado_en';
 
+// Lista los cursos de un usuario con el número de tareas de cada uno.
 export async function listarPorUsuario(usuarioId) {
   const { rows } = await query(
     `SELECT c.id, c.usuario_id, c.nombre, c.docente, c.descripcion, c.creado_en,
             COUNT(t.id)::int AS total_tareas
      FROM cursos c
-     LEFT JOIN tareas t ON t.curso_id = c.id
+     LEFT JOIN tareas t ON t.curso_id = c.id   -- LEFT JOIN: incluye cursos sin tareas
      WHERE c.usuario_id = $1
      GROUP BY c.id
-     ORDER BY c.creado_en DESC`,
+     ORDER BY c.creado_en DESC`, // más recientes primero
     [usuarioId],
   );
   return rows;
 }
 
+// Busca un curso por id (devuelve null si no existe).
 export async function buscarPorId(id) {
   const { rows } = await query(
     `SELECT ${CAMPOS} FROM cursos WHERE id = $1`,
@@ -24,6 +27,7 @@ export async function buscarPorId(id) {
   return rows[0] || null;
 }
 
+// Inserta un curso; docente y descripción pasan a null si no se enviaron.
 export async function crear({ usuarioId, nombre, docente, descripcion }) {
   const { rows } = await query(
     `INSERT INTO cursos (usuario_id, nombre, docente, descripcion)
@@ -34,10 +38,11 @@ export async function crear({ usuarioId, nombre, docente, descripcion }) {
   return rows[0];
 }
 
+// Actualiza solo los campos recibidos, armando el SET dinámicamente.
 export async function actualizar(id, campos) {
-  const asignaciones = [];
-  const valores = [];
-  let i = 1;
+  const asignaciones = []; // fragmentos como "nombre = $1"
+  const valores = []; // valores que corresponden a cada $n
+  let i = 1; // contador del placeholder
 
   for (const [columna, valor] of Object.entries(campos)) {
     asignaciones.push(`${columna} = $${i}`);
@@ -45,6 +50,7 @@ export async function actualizar(id, campos) {
     i += 1;
   }
 
+  // El id va al final, como último parámetro del WHERE.
   valores.push(id);
   const { rows } = await query(
     `UPDATE cursos SET ${asignaciones.join(', ')}
@@ -55,11 +61,13 @@ export async function actualizar(id, campos) {
   return rows[0] || null;
 }
 
+// Elimina un curso. Devuelve true si realmente borró una fila.
 export async function eliminar(id) {
   const { rowCount } = await query('DELETE FROM cursos WHERE id = $1', [id]);
   return rowCount > 0;
 }
 
+// Lista las tareas de un curso, marcando cuáles están vencidas.
 export async function listarTareas(cursoId) {
   const { rows } = await query(
     `SELECT id, curso_id, titulo, descripcion, fecha_entrega, prioridad,
@@ -67,7 +75,7 @@ export async function listarTareas(cursoId) {
             (fecha_entrega < NOW() AND estado <> 'completada') AS vencida
      FROM tareas
      WHERE curso_id = $1
-     ORDER BY fecha_entrega ASC`,
+     ORDER BY fecha_entrega ASC`, // las más próximas primero
     [cursoId],
   );
   return rows;

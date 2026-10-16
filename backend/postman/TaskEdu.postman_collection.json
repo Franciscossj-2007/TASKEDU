@@ -1,0 +1,172 @@
+{
+  "info": {
+    "name": "TaskEdu API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000/api" },
+    { "key": "token", "value": "" },
+    { "key": "cursoId", "value": "1" },
+    { "key": "tareaId", "value": "1" }
+  ],
+  "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Registro",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/register",
+            "body": { "mode": "raw", "raw": "{\n  \"nombre\": \"Estudiante\",\n  \"correo\": \"estudiante@correo.com\",\n  \"password\": \"Clave1234\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('201 o 409', () => pm.expect([201, 409]).to.include(pm.response.code));", "if (pm.response.code === 201) pm.collectionVariables.set('token', pm.response.json().token);"] } }]
+        },
+        {
+          "name": "Login (usuario demo)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/login",
+            "body": { "mode": "raw", "raw": "{\n  \"correo\": \"demo@taskedu.com\",\n  \"password\": \"Demo1234\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('200', () => pm.response.to.have.status(200));", "pm.collectionVariables.set('token', pm.response.json().token);"] } }]
+        },
+        {
+          "name": "Login incorrecto (401)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/login",
+            "body": { "mode": "raw", "raw": "{\n  \"correo\": \"demo@taskedu.com\",\n  \"password\": \"mala\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('401', () => pm.response.to.have.status(401));"] } }]
+        },
+        {
+          "name": "Perfil",
+          "request": { "method": "GET", "url": "{{baseUrl}}/auth/me" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('200', () => pm.response.to.have.status(200));"] } }]
+        },
+        {
+          "name": "Cursos sin token (401)",
+          "request": { "auth": { "type": "noauth" }, "method": "GET", "url": "{{baseUrl}}/cursos" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('401', () => pm.response.to.have.status(401));"] } }]
+        }
+      ]
+    },
+    {
+      "name": "Cursos",
+      "item": [
+        {
+          "name": "Listar",
+          "request": { "method": "GET", "url": "{{baseUrl}}/cursos" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('200', () => pm.response.to.have.status(200));"] } }]
+        },
+        {
+          "name": "Crear",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/cursos",
+            "body": { "mode": "raw", "raw": "{\n  \"nombre\": \"Curso de prueba\",\n  \"docente\": \"Docente\",\n  \"descripcion\": \"Creado desde Postman\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('201', () => pm.response.to.have.status(201));", "pm.collectionVariables.set('cursoId', pm.response.json().curso.id);"] } }]
+        },
+        {
+          "name": "Crear sin nombre (400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/cursos",
+            "body": { "mode": "raw", "raw": "{}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('400', () => pm.response.to.have.status(400));"] } }]
+        },
+        { "name": "Obtener", "request": { "method": "GET", "url": "{{baseUrl}}/cursos/{{cursoId}}" } },
+        {
+          "name": "Actualizar",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/cursos/{{cursoId}}",
+            "body": { "mode": "raw", "raw": "{\n  \"nombre\": \"Curso actualizado\"\n}" }
+          }
+        },
+        { "name": "Tareas del curso", "request": { "method": "GET", "url": "{{baseUrl}}/cursos/{{cursoId}}/tareas" } },
+        {
+          "name": "Eliminar",
+          "request": { "method": "DELETE", "url": "{{baseUrl}}/cursos/{{cursoId}}" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('204', () => pm.response.to.have.status(204));"] } }]
+        }
+      ]
+    },
+    {
+      "name": "Tareas",
+      "item": [
+        {
+          "name": "Crear (usa cursoId)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/tareas",
+            "body": { "mode": "raw", "raw": "{\n  \"curso_id\": {{cursoId}},\n  \"titulo\": \"Tarea de prueba\",\n  \"descripcion\": \"Desde Postman\",\n  \"fecha_entrega\": \"2030-01-15T18:00:00Z\",\n  \"prioridad\": \"alta\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('201', () => pm.response.to.have.status(201));", "pm.collectionVariables.set('tareaId', pm.response.json().tarea.id);"] } }]
+        },
+        {
+          "name": "Crear con prioridad invalida (400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/tareas",
+            "body": { "mode": "raw", "raw": "{\n  \"curso_id\": 1,\n  \"titulo\": \"X\",\n  \"fecha_entrega\": \"2030-01-15T18:00:00Z\",\n  \"prioridad\": \"urgente\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('400', () => pm.response.to.have.status(400));"] } }]
+        },
+        { "name": "Listar", "request": { "method": "GET", "url": "{{baseUrl}}/tareas" } },
+        { "name": "Filtrar por estado", "request": { "method": "GET", "url": "{{baseUrl}}/tareas?estado=pendiente" } },
+        { "name": "Filtrar por prioridad", "request": { "method": "GET", "url": "{{baseUrl}}/tareas?prioridad=alta" } },
+        { "name": "Filtrar proximas", "request": { "method": "GET", "url": "{{baseUrl}}/tareas?vencimiento=proximas" } },
+        { "name": "Obtener", "request": { "method": "GET", "url": "{{baseUrl}}/tareas/{{tareaId}}" } },
+        {
+          "name": "Actualizar",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/tareas/{{tareaId}}",
+            "body": { "mode": "raw", "raw": "{\n  \"titulo\": \"Titulo actualizado\"\n}" }
+          }
+        },
+        {
+          "name": "Cambiar estado",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/tareas/{{tareaId}}/estado",
+            "body": { "mode": "raw", "raw": "{\n  \"estado\": \"completada\"\n}" }
+          }
+        },
+        {
+          "name": "Eliminar",
+          "request": { "method": "DELETE", "url": "{{baseUrl}}/tareas/{{tareaId}}" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('204', () => pm.response.to.have.status(204));"] } }]
+        }
+      ]
+    },
+    {
+      "name": "Dashboard",
+      "item": [
+        {
+          "name": "Resumen",
+          "request": { "method": "GET", "url": "{{baseUrl}}/dashboard/resumen" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('200', () => pm.response.to.have.status(200));"] } }]
+        }
+      ]
+    }
+  ]
+}
