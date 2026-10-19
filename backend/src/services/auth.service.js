@@ -31,12 +31,12 @@ export async function login({ correo, password }) {
 
   // Mensaje generico para no revelar si el correo existe.
   if (!usuario) {
-    throw ApiError.unauthorized('Correo o contrasena incorrectos');
+    throw ApiError.unauthorized('Correo o contraseña incorrectos');
   }
 
   const coincide = await bcrypt.compare(password, usuario.password_hash);
   if (!coincide) {
-    throw ApiError.unauthorized('Correo o contrasena incorrectos');
+    throw ApiError.unauthorized('Correo o contraseña incorrectos');
   }
 
   const { password_hash, ...usuarioPublico } = usuario;
