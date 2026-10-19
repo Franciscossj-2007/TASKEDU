@@ -1,67 +1,156 @@
 import { useState } from 'react';
-import { Modal, ScrollView, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { mensajeError, tareasApi } from '../api';
-import { Button, Chip, ESTADOS, Empty, ErrorMsg, Field, PRIORIDADES, colors, isoATexto, s, textoAIso } from '../ui';
+import {
+  Button,
+  ErrorMsg,
+  Field,
+  ModalUI,
+  OPCIONES_ESTADO,
+  OPCIONES_PRIORIDAD,
+  SelectCampo,
+  Vacio,
+  isoATexto,
+  textoAIso,
+} from '../ui';
 
-// Formulario modal para crear o editar una tarea.
+// Formulario modal para crear o editar una tarea, con los mismos campos,
+// validaciones y textos del TareaFormulario del frontend web.
 export default function TareaForm({ tarea, cursos, cursoIdInicial, onClose, onSaved }) {
   const [f, setF] = useState({
-    curso_id: tarea?.curso_id ?? cursoIdInicial ?? cursos[0]?.id,
+    curso_id: tarea?.curso_id ?? cursoIdInicial ?? cursos[0]?.id ?? '',
     titulo: tarea?.titulo ?? '',
     descripcion: tarea?.descripcion ?? '',
     fecha: tarea ? isoATexto(tarea.fecha_entrega) : isoATexto(new Date(Date.now() + 86400000).toISOString()),
     prioridad: tarea?.prioridad ?? 'media',
     estado: tarea?.estado ?? 'pendiente',
   });
-  const [error, setError] = useState('');
-  const [guardando, setGuardando] = useState(false);
-  const set = (k) => (v) => setF({ ...f, [k]: v });
+  const [errores, setErrores] = useState({});
+  const [errorGeneral, setErrorGeneral] = useState('');
+  const [enviando, setEnviando] = useState(false);
 
-  const guardar = async () => {
-    const fecha_entrega = textoAIso(f.fecha);
-    if (!fecha_entrega) return setError('La fecha debe tener el formato AAAA-MM-DD HH:MM');
+  const set = (campo) => (valor) => setF((actual) => ({ ...actual, [campo]: valor }));
+
+  function validar() {
+    const nuevos = {};
+    if (!f.titulo.trim()) nuevos.titulo = 'El titulo es obligatorio';
+    if (!f.curso_id) nuevos.curso_id = 'Selecciona un curso';
+    if (!f.fecha) nuevos.fecha = 'La fecha de entrega es obligatoria';
+    else if (!textoAIso(f.fecha)) nuevos.fecha = 'Formato: AAAA-MM-DD HH:MM';
+    if (!f.prioridad) nuevos.prioridad = 'Selecciona una prioridad';
+    setErrores(nuevos);
+    return Object.keys(nuevos).length === 0;
+  }
+
+  async function guardar() {
+    setErrorGeneral('');
+    if (!validar()) return;
     const body = {
-      curso_id: f.curso_id, titulo: f.titulo, descripcion: f.descripcion || null,
-      fecha_entrega, prioridad: f.prioridad, estado: f.estado,
+      curso_id: Number(f.curso_id),
+      titulo: f.titulo.trim(),
+      descripcion: f.descripcion.trim() || null,
+      fecha_entrega: textoAIso(f.fecha),
+      prioridad: f.prioridad,
+      estado: f.estado,
     };
-    setGuardando(true);
+    setEnviando(true);
     try {
-      if (tarea) await tareasApi.actualizar(tarea.id, body); else await tareasApi.crear(body);
+      if (tarea) await tareasApi.actualizar(tarea.id, body);
+      else await tareasApi.crear(body);
       onSaved();
     } catch (e) {
-      setError(mensajeError(e));
-      setGuardando(false);
+      setErrorGeneral(mensajeError(e));
+      setEnviando(false);
     }
-  };
+  }
+
+  const opcionesCursos = cursos.map((c) => ({ valor: c.id, etiqueta: c.nombre }));
 
   return (
-    <Modal animationType="slide" onRequestClose={onClose}>
-      <ScrollView style={{ backgroundColor: colors.bg }} contentContainerStyle={{ padding: 16, paddingTop: 48 }} keyboardShouldPersistTaps="handled">
-        <Text style={s.title}>{tarea ? 'Editar tarea' : 'Nueva tarea'}</Text>
-        <ErrorMsg>{error}</ErrorMsg>
-        {cursos.length === 0 ? <Empty>Primero debe crear un curso.</Empty> : (
-          <>
-            <Text style={s.label}>Curso</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-              {cursos.map((c) => <Chip key={c.id} label={c.nombre} active={f.curso_id === c.id} onPress={() => set('curso_id')(c.id)} />)}
+    <ModalUI
+      visible
+      titulo={tarea ? 'Editar tarea' : 'Nueva tarea'}
+      onCerrar={onClose}
+      pie={
+        <>
+          <Button kind="fantasma" title="Cancelar" onPress={onClose} disabled={enviando} />
+          <Button title={tarea ? 'Guardar cambios' : 'Crear tarea'} cargando={enviando} onPress={guardar} />
+        </>
+      }
+    >
+      <ErrorMsg>{errorGeneral}</ErrorMsg>
+
+      {cursos.length === 0 ? (
+        <Vacio icono="▦" titulo="Primero crea un curso" mensaje="Necesitas al menos un curso para registrar tareas." />
+      ) : (
+        <>
+          <Field
+            label="Titulo"
+            requerido
+            value={f.titulo}
+            onChangeText={set('titulo')}
+            error={errores.titulo}
+            maxLength={150}
+            placeholder="Ej. Investigar sobre normalizacion de bases de datos"
+          />
+          <Field
+            label="Descripcion"
+            value={f.descripcion}
+            onChangeText={set('descripcion')}
+            error={errores.descripcion}
+            multiline
+            maxLength={2000}
+            placeholder="Detalles opcionales de la tarea"
+          />
+
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <View style={{ flex: 1 }}>
+              <SelectCampo
+                label="Curso"
+                requerido
+                value={f.curso_id}
+                opciones={opcionesCursos}
+                onChange={set('curso_id')}
+                error={errores.curso_id}
+                placeholder="Selecciona un curso"
+              />
             </View>
-            <Field label="Titulo" value={f.titulo} onChangeText={set('titulo')} maxLength={150} />
-            <Field label="Descripcion" value={f.descripcion} onChangeText={set('descripcion')} multiline />
-            <Field label="Fecha de entrega (AAAA-MM-DD HH:MM)" value={f.fecha} onChangeText={set('fecha')} autoCapitalize="none" />
-            <Text style={s.label}>Prioridad</Text>
-            <View style={{ flexDirection: 'row', marginBottom: 12 }}>
-              {Object.entries(PRIORIDADES).map(([k, v]) => <Chip key={k} label={v} active={f.prioridad === k} onPress={() => set('prioridad')(k)} />)}
+            <View style={{ flex: 1 }}>
+              <Field
+                label="Fecha y hora de entrega"
+                requerido
+                value={f.fecha}
+                onChangeText={set('fecha')}
+                error={errores.fecha}
+                autoCapitalize="none"
+                placeholder="AAAA-MM-DD HH:MM"
+              />
             </View>
-            <Text style={s.label}>Estado</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 20 }}>
-              {Object.entries(ESTADOS).map(([k, v]) => <Chip key={k} label={v} active={f.estado === k} onPress={() => set('estado')(k)} />)}
+          </View>
+
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <View style={{ flex: 1 }}>
+              <SelectCampo
+                label="Prioridad"
+                requerido
+                value={f.prioridad}
+                opciones={OPCIONES_PRIORIDAD}
+                onChange={set('prioridad')}
+                error={errores.prioridad}
+              />
             </View>
-            <Button kind="primary" title={guardando ? 'Guardando...' : 'Guardar'} onPress={guardar} disabled={guardando} />
-            <View style={{ height: 10 }} />
-          </>
-        )}
-        <Button title="Cancelar" onPress={onClose} />
-      </ScrollView>
-    </Modal>
+            <View style={{ flex: 1 }}>
+              <SelectCampo
+                label="Estado"
+                value={f.estado}
+                opciones={OPCIONES_ESTADO}
+                onChange={set('estado')}
+                error={errores.estado}
+              />
+            </View>
+          </View>
+        </>
+      )}
+    </ModalUI>
   );
 }

@@ -1,116 +1,234 @@
 import { useCallback, useEffect, useState } from 'react';
-import { FlatList, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
+import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { cursosApi, mensajeError, tareasApi } from '../api';
-import { Button, Chip, ESTADOS, Empty, ErrorMsg, Loading, PRIORIDADES, colors, s } from '../ui';
+import {
+  Button,
+  ErrorMsg,
+  Field,
+  Loading,
+  OPCIONES_ESTADO,
+  OPCIONES_PRIORIDAD,
+  SelectCampo,
+  Vacio,
+  colors,
+  s,
+} from '../ui';
 import TareaCard from '../components/TareaCard';
 import TareaForm from '../components/TareaForm';
 
-const POR_PAGINA = 10;
-const VENCIMIENTOS = { proximas: 'Proximas (7d)', vencidas: 'Vencidas' };
-const ORDENES = {
-  'fecha_entrega:asc': 'Entrega cercana',
-  'fecha_entrega:desc': 'Entrega lejana',
-  'prioridad:asc': 'Prioridad',
-  'creado_en:desc': 'Recientes',
+const LIMITE = 9;
+
+const FILTROS_INICIALES = {
+  busqueda: '',
+  estado: '',
+  prioridad: '',
+  curso_id: '',
+  vencimiento: '',
+  orden: 'fecha_entrega',
+  dir: 'asc',
 };
 
-// Fila horizontal de chips con opcion "Todos".
-function FiltroFila({ titulo, opciones, valor, onChange }) {
-  return (
-    <View style={{ marginBottom: 6 }}>
-      <Text style={[s.muted, { marginBottom: 4 }]}>{titulo}</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <Chip label="Todos" active={valor === ''} onPress={() => onChange('')} />
-        {Object.entries(opciones).map(([k, v]) => <Chip key={k} label={v} active={String(valor) === k} onPress={() => onChange(k)} />)}
-      </ScrollView>
-    </View>
-  );
-}
+const OPCIONES_VENCIMIENTO = [
+  { valor: 'proximas', etiqueta: 'Proximas (7 dias)' },
+  { valor: 'vencidas', etiqueta: 'Vencidas' },
+];
+const OPCIONES_ORDEN = [
+  { valor: 'fecha_entrega', etiqueta: 'Fecha de entrega' },
+  { valor: 'prioridad', etiqueta: 'Prioridad' },
+  { valor: 'creado_en', etiqueta: 'Fecha de creacion' },
+];
+const OPCIONES_DIR = [
+  { valor: 'asc', etiqueta: 'Ascendente' },
+  { valor: 'desc', etiqueta: 'Descendente' },
+];
 
 export default function TareasScreen({ focused }) {
-  const [filtros, setFiltros] = useState({ estado: '', prioridad: '', curso_id: '', vencimiento: '', orden: 'fecha_entrega:asc' });
-  const [busqueda, setBusqueda] = useState('');
-  const [busquedaAplicada, setBusquedaAplicada] = useState('');
-  const [verFiltros, setVerFiltros] = useState(false);
-  const [paginas, setPaginas] = useState(1);
-  const [datos, setDatos] = useState(null);
   const [cursos, setCursos] = useState([]);
+  const [filtros, setFiltros] = useState(FILTROS_INICIALES);
+  const [busquedaDebounced, setBusquedaDebounced] = useState('');
+  const [page, setPage] = useState(1);
+
+  const [datos, setDatos] = useState({ tareas: [], total: 0 });
+  const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
   const [form, setForm] = useState(null);
+  const [recarga, setRecarga] = useState(0);
   const [refrescando, setRefrescando] = useState(false);
 
-  // Espera 300 ms tras escribir antes de buscar.
   useEffect(() => {
-    const t = setTimeout(() => { setBusquedaAplicada(busqueda); setPaginas(1); }, 300);
-    return () => clearTimeout(t);
-  }, [busqueda]);
+    let activo = true;
+    cursosApi
+      .listar()
+      .then((res) => { if (activo) setCursos(res.cursos); })
+      .catch(() => {});
+    return () => { activo = false; };
+  }, []);
+
+  // Debounce de 400 ms igual al web.
+  useEffect(() => {
+    const id = setTimeout(() => {
+      setBusquedaDebounced(filtros.busqueda);
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(id);
+  }, [filtros.busqueda]);
 
   const cargar = useCallback(async () => {
+    setCargando(true);
     setError('');
-    const [orden, dir] = filtros.orden.split(':');
     try {
-      const [t, c] = await Promise.all([
-        tareasApi.listar({ ...filtros, orden, dir, busqueda: busquedaAplicada, limit: paginas * POR_PAGINA }),
-        cursosApi.listar(),
-      ]);
-      setDatos(t);
-      setCursos(c.cursos);
-    } catch (e) { setError(mensajeError(e)); }
-  }, [filtros, busquedaAplicada, paginas]);
+      const res = await tareasApi.listar({ ...filtros, busqueda: busquedaDebounced, page, limit: LIMITE });
+      setDatos({ tareas: res.tareas, total: res.total });
+    } catch (e) {
+      setError(mensajeError(e));
+    } finally {
+      setCargando(false);
+    }
+  }, [filtros, busquedaDebounced, page, recarga]);
 
   useEffect(() => { if (focused) cargar(); }, [focused, cargar]);
 
-  const cambiarFiltro = (k) => (v) => { setPaginas(1); setFiltros({ ...filtros, [k]: v }); };
-  const accion = (p) => p.then(cargar).catch((e) => setError(mensajeError(e)));
-  const hayFiltros = filtros.estado || filtros.prioridad || filtros.curso_id || filtros.vencimiento || busquedaAplicada;
-  const cursosOpciones = Object.fromEntries(cursos.map((c) => [String(c.id), c.nombre]));
+  const totalPaginas = Math.max(1, Math.ceil(datos.total / LIMITE));
+  const hayFiltros = Object.entries(filtros).some(([clave, valor]) => clave !== 'orden' && clave !== 'dir' && valor !== '');
+
+  const cambiar = (campo) => (valor) => {
+    setFiltros((actual) => ({ ...actual, [campo]: valor }));
+    if (campo !== 'busqueda') setPage(1);
+  };
+
+  function limpiar() {
+    setFiltros(FILTROS_INICIALES);
+    setPage(1);
+  }
+
+  function abrirNueva() {
+    setForm({});
+  }
+
+  async function cambiarEstado(tarea, estado) {
+    try {
+      const actualizada = await tareasApi.cambiarEstado(tarea.id, estado);
+      setDatos((actual) => ({
+        ...actual,
+        tareas: actual.tareas.map((t) =>
+          t.id === actualizada.id
+            ? { ...t, ...actualizada, curso_nombre: t.curso_nombre }
+            : t,
+        ),
+      }));
+    } catch (e) {
+      setError(mensajeError(e));
+    }
+  }
+
+  async function eliminarTarea(tarea) {
+    try {
+      await tareasApi.eliminar(tarea.id);
+      setRecarga((n) => n + 1);
+    } catch (e) {
+      setError(mensajeError(e));
+    }
+  }
+
+  const opcionesCursos = cursos.map((c) => ({ valor: String(c.id), etiqueta: c.nombre }));
 
   return (
-    <View style={{ flex: 1 }}>
-      <View style={{ padding: 16, paddingBottom: 8 }}>
-        <View style={s.row}>
-          <Text style={s.title}>Tareas</Text>
-          <Button small kind="primary" title="+ Nueva" onPress={() => setForm({})} />
-        </View>
-        <View style={[s.row, { gap: 8 }]}>
-          <TextInput style={[s.input, { flex: 1 }]} placeholder="Buscar por titulo..." placeholderTextColor="#9aa3b5" value={busqueda} onChangeText={setBusqueda} />
-          <Button small title={verFiltros ? 'Ocultar' : 'Filtros'} onPress={() => setVerFiltros(!verFiltros)} />
-        </View>
-        {verFiltros && (
-          <View style={{ marginTop: 10 }}>
-            <FiltroFila titulo="Estado" opciones={ESTADOS} valor={filtros.estado} onChange={cambiarFiltro('estado')} />
-            <FiltroFila titulo="Prioridad" opciones={PRIORIDADES} valor={filtros.prioridad} onChange={cambiarFiltro('prioridad')} />
-            <FiltroFila titulo="Curso" opciones={cursosOpciones} valor={filtros.curso_id} onChange={cambiarFiltro('curso_id')} />
-            <FiltroFila titulo="Fecha" opciones={VENCIMIENTOS} valor={filtros.vencimiento} onChange={cambiarFiltro('vencimiento')} />
-            <Text style={[s.muted, { marginBottom: 4 }]}>Ordenar por</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {Object.entries(ORDENES).map(([k, v]) => <Chip key={k} label={v} active={filtros.orden === k} onPress={() => cambiarFiltro('orden')(k)} />)}
-            </ScrollView>
-          </View>
-        )}
-        <ErrorMsg>{error}</ErrorMsg>
-      </View>
-      {!datos && !error ? <Loading /> : (
-        <FlatList
-          data={datos?.tareas || []}
-          keyExtractor={(t) => String(t.id)}
-          contentContainerStyle={{ padding: 16, paddingTop: 4 }}
-          ListEmptyComponent={<Empty>{hayFiltros ? 'Ninguna tarea coincide con los filtros.' : 'Aun no tiene tareas. Cree la primera.'}</Empty>}
-          refreshControl={<RefreshControl refreshing={refrescando} onRefresh={async () => { setRefrescando(true); await cargar(); setRefrescando(false); }} />}
-          renderItem={({ item }) => (
-            <TareaCard
-              tarea={item}
-              onEstado={(t, estado) => accion(tareasApi.cambiarEstado(t.id, estado))}
-              onEdit={setForm}
-              onDelete={(t) => accion(tareasApi.eliminar(t.id))}
-            />
-          )}
-          ListFooterComponent={datos && datos.tareas.length < datos.total ? (
-            <Button title={`Cargar mas (${datos.tareas.length} de ${datos.total})`} onPress={() => setPaginas(paginas + 1)} />
-          ) : null}
+    <ScrollView
+      contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
+      keyboardShouldPersistTaps="handled"
+      refreshControl={
+        <RefreshControl
+          refreshing={refrescando}
+          onRefresh={async () => { setRefrescando(true); await cargar(); setRefrescando(false); }}
         />
+      }
+    >
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 18 }}>
+        <View style={{ flex: 1 }}>
+          <Text style={s.paginaTitulo}>Mis tareas</Text>
+          <Text style={s.paginaSubtitulo}>Filtra, ordena y gestiona tus tareas academicas</Text>
+        </View>
+        <Button title="Nueva tarea" small onPress={abrirNueva} />
+      </View>
+
+      {cursos.length === 0 ? (
+        <ErrorMsg tipo="info">Aun no tienes cursos. Crea un curso antes de registrar tareas.</ErrorMsg>
+      ) : null}
+
+      {/* Filtros (como .filtros del web) */}
+      <View style={[s.tarjeta, { padding: 18, marginBottom: 18 }]}>
+        <Field
+          label="Buscar por titulo"
+          value={filtros.busqueda}
+          onChangeText={cambiar('busqueda')}
+          placeholder="Escribe para buscar..."
+        />
+        <SelectCampo label="Estado" value={filtros.estado} opciones={OPCIONES_ESTADO} onChange={cambiar('estado')} placeholder="Todos" />
+        <SelectCampo label="Prioridad" value={filtros.prioridad} opciones={OPCIONES_PRIORIDAD} onChange={cambiar('prioridad')} placeholder="Todas" />
+        <SelectCampo label="Curso" value={filtros.curso_id} opciones={opcionesCursos} onChange={cambiar('curso_id')} placeholder="Todos" />
+        <SelectCampo label="Vencimiento" value={filtros.vencimiento} opciones={OPCIONES_VENCIMIENTO} onChange={cambiar('vencimiento')} placeholder="Cualquiera" />
+        <SelectCampo label="Ordenar por" value={filtros.orden} opciones={OPCIONES_ORDEN} onChange={cambiar('orden')} />
+        <SelectCampo label="Direccion" value={filtros.dir} opciones={OPCIONES_DIR} onChange={cambiar('dir')} />
+        {hayFiltros ? (
+          <Button kind="fantasma" small title="Limpiar filtros" onPress={limpiar} />
+        ) : null}
+      </View>
+
+      {error ? <ErrorMsg titulo="No se pudieron cargar las tareas">{error}</ErrorMsg> : null}
+
+      {cargando ? (
+        <Loading />
+      ) : datos.tareas.length === 0 ? (
+        <Vacio
+          icono={hayFiltros ? '🔍' : '📝'}
+          titulo={hayFiltros ? 'Sin resultados' : 'Aun no tienes tareas'}
+          mensaje={
+            hayFiltros
+              ? 'Prueba ajustando o limpiando los filtros.'
+              : 'Crea tu primera tarea para empezar a organizarte.'
+          }
+        >
+          {hayFiltros ? (
+            <Button kind="secundario" title="Limpiar filtros" onPress={limpiar} />
+          ) : (
+            <Button title="Crear tarea" onPress={abrirNueva} disabled={cursos.length === 0} />
+          )}
+        </Vacio>
+      ) : (
+        <>
+          <Text style={{ fontSize: 13, color: colors.textoSuave, marginBottom: 10 }}>
+            Mostrando {datos.tareas.length} de {datos.total} tareas
+          </Text>
+          {datos.tareas.map((t) => (
+            <TareaCard
+              key={t.id}
+              tarea={t}
+              onEstado={cambiarEstado}
+              onEdit={setForm}
+              onDelete={eliminarTarea}
+            />
+          ))}
+
+          {totalPaginas > 1 ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16, marginTop: 8 }}>
+              <Button kind="secundario" small title="Anterior" disabled={page <= 1} onPress={() => setPage((p) => Math.max(1, p - 1))} />
+              <Text style={{ fontSize: 14, color: colors.textoSuave }}>
+                Pagina {page} de {totalPaginas}
+              </Text>
+              <Button kind="secundario" small title="Siguiente" disabled={page >= totalPaginas} onPress={() => setPage((p) => Math.min(totalPaginas, p + 1))} />
+            </View>
+          ) : null}
+        </>
       )}
-      {form && <TareaForm tarea={form.id ? form : null} cursos={cursos} onClose={() => setForm(null)} onSaved={() => { setForm(null); cargar(); }} />}
-    </View>
+
+      {form ? (
+        <TareaForm
+          tarea={form.id ? form : null}
+          cursos={cursos}
+          onClose={() => setForm(null)}
+          onSaved={() => { setForm(null); setRecarga((n) => n + 1); }}
+        />
+      ) : null}
+    </ScrollView>
   );
 }
