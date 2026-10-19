@@ -12,8 +12,9 @@ import { env } from './config/env.js';
 // Crea la aplicación Express.
 const app = express();
 
-// Habilita CORS solo para el origen configurado en el .env.
-app.use(cors({ origin: env.corsOrigin }));
+const corsOrigins =
+  env.corsOrigin === '*' ? '*' : env.corsOrigin.split(',').map((o) => o.trim());
+app.use(cors({ origin: corsOrigins }));
 // Interpreta el cuerpo de las peticiones JSON (máximo 1 MB) y lo deja en req.body.
 app.use(express.json({ limit: '1mb' }));
 

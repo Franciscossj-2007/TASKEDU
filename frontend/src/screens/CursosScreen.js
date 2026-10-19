@@ -1,36 +1,33 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, FlatList, Modal, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { cursosApi, mensajeError } from '../api';
-import { Pressable } from 'react-native';
+import { Button, ErrorMsg, Loading, Vacio, colors, s } from '../ui';
+import CursoForm from '../components/CursoForm';
 import CursoDetalleScreen from './CursoDetalleScreen';
-import { Button, Empty, ErrorMsg, Field, Loading, colors, s } from '../ui';
 
-function CursoForm({ curso, onClose, onSaved }) {
-  const [f, setF] = useState({ nombre: curso?.nombre ?? '', docente: curso?.docente ?? '', descripcion: curso?.descripcion ?? '' });
-  const [error, setError] = useState('');
-  const set = (k) => (v) => setF({ ...f, [k]: v });
-
-  const guardar = async () => {
-    const body = { nombre: f.nombre, docente: f.docente || null, descripcion: f.descripcion || null };
-    try {
-      if (curso) await cursosApi.actualizar(curso.id, body); else await cursosApi.crear(body);
-      onSaved();
-    } catch (e) { setError(mensajeError(e)); }
-  };
-
+// Tarjeta de curso replicando el .curso del web.
+function CursoCard({ curso: c, onVer, onEditar, onEliminar }) {
   return (
-    <Modal animationType="slide" onRequestClose={onClose}>
-      <ScrollView style={{ backgroundColor: colors.bg }} contentContainerStyle={{ padding: 16, paddingTop: 48 }} keyboardShouldPersistTaps="handled">
-        <Text style={s.title}>{curso ? 'Editar curso' : 'Nuevo curso'}</Text>
-        <ErrorMsg>{error}</ErrorMsg>
-        <Field label="Nombre" value={f.nombre} onChangeText={set('nombre')} />
-        <Field label="Docente" value={f.docente} onChangeText={set('docente')} />
-        <Field label="Descripcion" value={f.descripcion} onChangeText={set('descripcion')} multiline />
-        <Button kind="primary" title="Guardar" onPress={guardar} />
-        <View style={{ height: 10 }} />
-        <Button title="Cancelar" onPress={onClose} />
-      </ScrollView>
-    </Modal>
+    <View style={[s.tarjeta, { padding: 20, gap: 8 }]}>
+      <Pressable onPress={() => onVer(c)}>
+        <Text style={{ fontSize: 17, fontWeight: '700', color: colors.texto }}>{c.nombre}</Text>
+      </Pressable>
+      {c.docente ? (
+        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.primarioOscuro }}>Docente: {c.docente}</Text>
+      ) : null}
+      {c.descripcion ? <Text style={{ fontSize: 14, color: colors.textoSuave }}>{c.descripcion}</Text> : null}
+      <Text style={{ fontSize: 13, color: colors.textoSuave }}>{c.total_tareas} tarea(s)</Text>
+
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.borde }}>
+        <Button kind="secundario" small title="Ver tareas" onPress={() => onVer(c)} />
+        <Pressable onPress={() => onEditar(c)} style={({ pressed }) => ({ marginLeft: 'auto', paddingVertical: 6, paddingHorizontal: 8, borderRadius: 6, backgroundColor: pressed ? colors.grisClaro : 'transparent' })} hitSlop={6}>
+          <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textoSuave }}>Editar</Text>
+        </Pressable>
+        <Pressable onPress={() => onEliminar(c)} style={({ pressed }) => ({ paddingVertical: 6, paddingHorizontal: 8, borderRadius: 6, backgroundColor: pressed ? colors.rojoClaro : 'transparent' })} hitSlop={6}>
+          <Text style={{ fontSize: 13, fontWeight: '600', color: colors.rojo }}>Eliminar</Text>
+        </Pressable>
+      </View>
+    </View>
   );
 }
 
@@ -43,48 +40,80 @@ export default function CursosScreen({ focused }) {
 
   const cargar = useCallback(async () => {
     setError('');
-    try { setCursos((await cursosApi.listar()).cursos); } catch (e) { setError(mensajeError(e)); }
+    try {
+      setCursos((await cursosApi.listar()).cursos);
+    } catch (e) {
+      setError(mensajeError(e));
+    }
   }, []);
+
   useEffect(() => { if (focused) cargar(); }, [focused, cargar]);
 
-  const confirmarBorrar = (c) =>
-    Alert.alert('Eliminar curso', `Eliminar "${c.nombre}"? Tambien se eliminaran sus tareas.`, [
+  const confirmarBorrar = (curso) =>
+    Alert.alert('Eliminar curso', `Seguro que deseas eliminar el curso "${curso.nombre}"? Se eliminaran tambien sus tareas.`, [
       { text: 'Cancelar', style: 'cancel' },
-      { text: 'Eliminar', style: 'destructive', onPress: () => cursosApi.eliminar(c.id).then(cargar).catch((e) => setError(mensajeError(e))) },
+      {
+        text: 'Eliminar',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await cursosApi.eliminar(curso.id);
+            setCursos((actual) => actual.filter((c) => c.id !== curso.id));
+          } catch (e) {
+            setError(mensajeError(e));
+          }
+        },
+      },
     ]);
 
   return (
     <View style={{ flex: 1 }}>
-      <View style={{ padding: 16, paddingBottom: 8 }}>
-        <View style={s.row}>
-          <Text style={s.title}>Cursos</Text>
-          <Button small kind="primary" title="+ Nuevo" onPress={() => setForm({})} />
+      <ScrollView
+        contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
+        refreshControl={
+          <RefreshControl refreshing={refrescando} onRefresh={async () => { setRefrescando(true); await cargar(); setRefrescando(false); }} />
+        }
+      >
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 18 }}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.paginaTitulo}>Mis cursos</Text>
+            <Text style={s.paginaSubtitulo}>Administra tus asignaturas y sus tareas</Text>
+          </View>
+          <Button title="Nuevo curso" small onPress={() => setForm({})} />
         </View>
-        <ErrorMsg>{error}</ErrorMsg>
-      </View>
-      {!cursos && !error ? <Loading /> : (
-        <FlatList
-          data={cursos || []}
-          keyExtractor={(c) => String(c.id)}
-          contentContainerStyle={{ padding: 16, paddingTop: 4 }}
-          ListEmptyComponent={<Empty>Aun no tiene cursos.</Empty>}
-          refreshControl={<RefreshControl refreshing={refrescando} onRefresh={async () => { setRefrescando(true); await cargar(); setRefrescando(false); }} />}
-          renderItem={({ item: c }) => (
-            <Pressable style={s.card} onPress={() => setDetalle(c)}>
-              <Text style={s.h3}>{c.nombre}</Text>
-              {c.docente ? <Text style={s.muted}>Docente: {c.docente}</Text> : null}
-              <Text style={s.muted}>{c.total_tareas} tarea(s)</Text>
-              {c.descripcion ? <Text style={{ marginTop: 6 }}>{c.descripcion}</Text> : null}
-              <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-                <Button small title="Editar" onPress={() => setForm(c)} />
-                <Button small kind="danger" title="Eliminar" onPress={() => confirmarBorrar(c)} />
-              </View>
-            </Pressable>
-          )}
+
+        {error ? <ErrorMsg titulo="No se pudieron cargar los cursos">{error}</ErrorMsg> : null}
+
+        {!cursos && !error ? (
+          <Loading />
+        ) : cursos && cursos.length === 0 ? (
+          <Vacio icono="▦" titulo="Aun no tienes cursos" mensaje="Crea tu primer curso para empezar a registrar tareas.">
+            <Button title="Crear curso" onPress={() => setForm({})} />
+          </Vacio>
+        ) : (
+          cursos?.map((c) => (
+            <CursoCard
+              key={c.id}
+              curso={c}
+              onVer={setDetalle}
+              onEditar={setForm}
+              onEliminar={confirmarBorrar}
+            />
+          ))
+        )}
+      </ScrollView>
+
+      {form ? (
+        <CursoForm
+          curso={form.id ? form : null}
+          onClose={() => setForm(null)}
+          onSaved={() => { setForm(null); cargar(); }}
         />
-      )}
-      {detalle && <CursoDetalleScreen curso={detalle} onClose={() => { setDetalle(null); cargar(); }} />}
-      {form && <CursoForm curso={form.id ? form : null} onClose={() => setForm(null)} onSaved={() => { setForm(null); cargar(); }} />}
+      ) : null}
+
+      {detalle ? (
+        <CursoDetalleScreen curso={detalle} onClose={() => { setDetalle(null); cargar(); }} />
+      ) : null}
     </View>
   );
 }

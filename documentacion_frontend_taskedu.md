@@ -106,6 +106,12 @@ formato de la API, solo se toca un archivo.
 
 ## 3. App movil (Expo) - la activa
 
+> **Diseno:** esta app fue re-estilizada para **usar el mismo modelo visual del
+> frontend web** (panel de marca en login/registro, cabecera con marca y
+> usuario, tarjetas, badges de estado/prioridad, alertas y modales con los
+> mismos colores y textos). La web original **no se modifico**; solo se adapto
+> su diseno a React Native.
+
 ### 3.1 Tecnologias
 
 | Paquete                     | Para que se uso                                        |
@@ -141,7 +147,8 @@ frontend/
 │   │   └── CursoDetalleScreen.js Detalle de curso y sus tareas (modal)
 │   └── components/
 │       ├── TareaCard.js         Tarjeta de tarea con acciones rapidas
-│       └── TareaForm.js         Formulario modal crear/editar tarea
+│       ├── TareaForm.js         Formulario modal crear/editar tarea
+│       └── CursoForm.js         Formulario modal crear/editar curso
 ├── package.json             Solo dependencias/scripts de Expo
 └── app.json
 ```
@@ -251,16 +258,16 @@ estado      ->  ?estado=pendiente
 prioridad   ->  ?prioridad=alta
 curso_id    ->  ?curso_id=2
 vencimiento ->  ?vencimiento=proximas | vencidas
-busqueda    ->  ?busqueda=parcial        (debounce de 300 ms)
-orden/dir   ->  ?orden=fecha_entrega&dir=asc   (seleccions tipo "fecha_entrega:asc")
-limit       ->  ?limit=10                ("Cargar mas": multiplos de 10)
+busqueda    ->  ?busqueda=parcial        (debounce de 400 ms)
+orden/dir   ->  ?orden=fecha_entrega&dir=asc
+page/limit  ->  ?page=1&limit=9          (paginacion Anterior/Siguiente)
 ```
 
 - El filtro vacio (`''`) se **limpia antes de enviar** (`request()` descarta
   `undefined`, `null` y `''`), asi "Todos" no manda nada.
-- La busqueda espera **300 ms** despues de dejar de escribir.
-- Paginacion por "Cargar mas": `limit = paginas * 10` (sin `page`, el backend
-  devuelve `total` y la lista crece).
+- La busqueda espera **400 ms** despues de dejar de escribir (igual que el web).
+- Paginacion por paginas de 9 con botones Anterior/Siguiente y el texto
+  "Pagina X de Y" (misma mecanica que la app web).
 - Hay `RefreshControl` (pull-to-refresh) en Panel, Tareas, Cursos y detalle.
 
 ### 3.6 Autenticacion y sesion (`src/auth.js`)
@@ -300,31 +307,39 @@ filtros aplicados) y **con datos**. Las eliminaciones piden confirmacion
 
 ### 3.8 Componentes y `src/ui.js`
 
-`ui.js` es el design system completo de la app movil:
+`ui.js` es el design system de la app movil y **es un port del diseno del
+frontend web** (mismos colores indigo, radios, badges, tarjetas, alertas y
+modales de `index.css`), adaptado a React Native:
 
 - **Colores:** `bg, surface, text, muted, border, primary, danger, ok, warn`.
 - **Etiquetas compartidas con el backend:** `ESTADOS`
   (`pendiente | en_progreso | completada`) y `PRIORIDADES`
   (`baja | media | alta`), con su color por prioridad.
-- **Componentes basicos:** `Button` (kinds `primary`/`danger`/`default`,
-  tamano `small`), `Field` (label + input), `Chip` (filtro seleccionable),
-  `Badge` (prioridad), `Loading`, `ErrorMsg`, `Empty`.
-- **Estilos:** un unico `StyleSheet.create` (`s`) con `card`, `title`, `h3`,
-  `muted`, `row`, `input`, etc. Todas las pantallas comparten estos estilos,
-  por eso se ven consistentes.
-- **Fechas:** `formatFecha(iso)` para mostrar, `isoATexto()` / `textoAIso()`
-  para el formulario (entrada `AAAA-MM-DD HH:MM`, validacion y conversion a
-  ISO 8601 antes de enviar).
+- **Componentes basicos:** `Button` (kinds `primario`/`secundario`/`peligro`/
+  `fantasma`, tamano `small`, `bloque`, `cargando`), `Field` (label + requerido
+  + ayuda + error), `SelectCampo`/`SelectValor` (equivalente al `<select>` del
+  web, en modal), `Chip`, `Badge` (con punto opcional), `Alerta`/`ErrorMsg`
+  (error o info), `Vacio` (icono + titulo + mensaje + accion), `Progreso`,
+  `Marca` y `Avatar`.
+- **Estilos:** un unico `StyleSheet.create` (`s`) con `tarjeta`, `paginaTitulo`,
+  `paginaSubtitulo`, `header`, `tabbar`, `modal*`, etc. Todas las pantallas
+  comparten estos estilos, por eso se ven consistentes con la version web.
+- **Fechas:** `formatearFecha(iso)` ("19 oct 2026", igual que el web),
+  `formatearFechaHora()`, `etiquetaVencimiento()` ("Vence hoy", "Vencio hace
+  N d"), y `isoATexto()` / `textoAIso()` para el formulario (entrada
+  `AAAA-MM-DD HH:MM`, validacion y conversion a ISO 8601 antes de enviar).
 
 Componentes de dominio:
 
 | Componente   | Responsabilidad                                                       |
 | ------------ | --------------------------------------------------------------------- |
-| `TareaCard`  | Titulo, curso, fecha, badge de prioridad, estado; borde rojo si
-`vencida`; acciones Completar / En progreso / Editar / Eliminar (con
-confirmacion)                                                        |
-| `TareaForm`  | Modal crear/editar tarea; elige curso con chips, valida fecha y
-envia al backend                                                     |
+| `TareaCard`  | Titulo + badge de prioridad, meta (curso/fecha), descripcion, badges de
+estado/vencida/aviso y acciones: selector de estado + Editar + Eliminar
+(con confirmacion); borde izquierdo rojo si esta vencida            |
+| `TareaForm`  | Modal crear/editar tarea; Titulo, Descripcion, Curso, Fecha, Prioridad
+y Estado, con las mismas validaciones y textos que el web            |
+| `CursoForm`  | Modal crear/editar curso (Nombre, Docente, Descripcion)                |
+
 
 ### 3.9 Formato de datos (coincide con el backend)
 
@@ -422,15 +437,18 @@ compile archivos `.jsx` ajenos y viceversa.
 | Errores por campo  | Mensajes unidos en una alerta (`ErrorMsg`)     | Mensaje general + error bajo cada input   |
 | Toasts             | No (solo `ErrorMsg` inline)                    | Si (`ToastContext`)                       |
 | Confirmar borrar   | `Alert.alert` nativo                           | `ConfirmDialog` personalizado             |
-| Busqueda (debounce)| 300 ms                                         | 400 ms                                    |
-| Paginacion         | "Cargar mas", 10 por carga                     | 9 por pagina                              |
-| Estilos            | `StyleSheet` en `src/ui.js`                    | CSS variables en `src/index.css`          |
-| Sesion extra       | —                                              | Restaurar sesion + evento global `401`    |
+| Busqueda (debounce)| 400 ms                                         | 400 ms                                    |
+| Paginacion         | 9 por pagina, Anterior/Siguiente               | 9 por pagina, Anterior/Siguiente          |
+| Estilos            | `StyleSheet` en `src/ui.js`, port del diseno web | CSS variables en `src/index.css`        |
+| Sesion extra       | Restaurar sesion con `GET /auth/me`            | Restaurar sesion + evento global `401`    |
 | Sin uso de         | `GET /tareas/:id`, `GET /health`               | `GET /health`                             |
 
 Ambas comparten: mismos endpoints, mismos campos snake_case, mismos estados y
 prioridades, token en `Authorization: Bearer`, caja de mensajes para errores
-del backend y logica de vencimiento calculada solo en el backend.
+del backend, logica de vencimiento calculada solo en el backend y **el mismo
+lenguaje visual** (colores indigo, tarjetas, badges, alertas y modales). La
+diferencia es que la app movil usa pestañas inferiores en lugar del sidebar,
+porque es una interfaz tactil.
 
 ---
 
@@ -524,6 +542,9 @@ regenerar el lockfile y luego `npm run dev` (puerto 5173, abre
    mismo problema (cross-origin) con la mecanica que le corresponde.
 7. **Los datos solo se recargan cuando la pantalla esta activa** (prop
    `focused`) -> no se llaman endpoints de pestañas ocultas.
+8. **Mismo modelo visual que la web** -> la app movil reutiliza el diseno
+   (colores, tarjetas, badges, textos y validaciones) para que se sienta como
+   el mismo producto; solo cambia la navegacion por pestañas tactiles.
 
 ---
 
@@ -538,6 +559,7 @@ regenerar el lockfile y luego `npm run dev` (puerto 5173, abre
 | Ver colores, estilos y componentes base movil   | `frontend/src/ui.js`                               |
 | Ver la pantalla de tareas con filtros (movil)   | `frontend/src/screens/TareasScreen.js`             |
 | Ver el formulario de tareas (movil)             | `frontend/src/components/TareaForm.js`             |
+| Ver el formulario de cursos (movil)             | `frontend/src/components/CursoForm.js`             |
 | Config de Expo (iconos, nombre, plugins)        | `frontend/app.json`                                |
 | Ver la URL base y el token (web)                | `frontend/src/services/api.js`                     |
 | Ver como se pide el login (web)                 | `frontend/src/services/auth.service.js`            |

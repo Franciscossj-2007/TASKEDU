@@ -1,5 +1,6 @@
 import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 
 const TOKEN_KEY = 'taskedu_token';
 const PUERTO_API = 3000;
@@ -19,9 +20,16 @@ let onUnauthorized = () => {};
 export const setUnauthorizedHandler = (fn) => { onUnauthorized = fn; };
 
 export const tokenStore = {
-  get: () => SecureStore.getItemAsync(TOKEN_KEY),
-  set: (t) => SecureStore.setItemAsync(TOKEN_KEY, t),
-  clear: () => SecureStore.deleteItemAsync(TOKEN_KEY),
+  get: () =>
+    Platform.OS === 'web' ? localStorage.getItem(TOKEN_KEY) : SecureStore.getItemAsync(TOKEN_KEY),
+  set: (t) =>
+    Platform.OS === 'web'
+      ? localStorage.setItem(TOKEN_KEY, t)
+      : SecureStore.setItemAsync(TOKEN_KEY, t),
+  clear: () =>
+    Platform.OS === 'web'
+      ? localStorage.removeItem(TOKEN_KEY)
+      : SecureStore.deleteItemAsync(TOKEN_KEY),
 };
 
 export class ApiError extends Error {
