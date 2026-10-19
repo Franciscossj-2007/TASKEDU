@@ -1,4 +1,5 @@
 import { Router } from 'express';
+// Sub-routers de cada módulo.
 import authRoutes from './auth.routes.js';
 import cursosRoutes from './cursos.routes.js';
 import tareasRoutes from './tareas.routes.js';
@@ -8,6 +9,7 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 
 const router = Router();
 
+// GET /api/health: comprueba que el servidor y la base de datos responden.
 router.get(
   '/health',
   asyncHandler(async (req, res) => {
@@ -16,6 +18,7 @@ router.get(
   }),
 );
 
+// Monta cada módulo bajo su prefijo: /api/auth, /api/cursos, etc.
 router.use('/auth', authRoutes);
 router.use('/cursos', cursosRoutes);
 router.use('/tareas', tareasRoutes);

@@ -106,3 +106,29 @@ GET /api/tareas?busqueda=parcial
 GET /api/tareas?orden=fecha_entrega&dir=asc
 GET /api/tareas?page=1&limit=10
 ```
+
+## Frontend (React Native + Expo)
+
+Carpeta `frontend/`: app React Native con Expo SDK 57 que usa la API del backend.
+
+```
+cd frontend
+npm install
+npx expo start
+```
+
+Escanee el QR con **Expo Go** (Android/iOS). Requisitos:
+
+1. El movil y el PC deben estar en la **misma red WiFi**.
+2. El backend debe estar activo (`npm start` en `backend/`).
+3. El firewall de Windows debe permitir el puerto 3000 (red privada).
+4. La app deduce la IP del PC automaticamente. Para forzarla cree
+   `frontend/.env` con `EXPO_PUBLIC_API_URL=http://IP_DEL_PC:3000/api`.
+
+La version web anterior (React + Vite) se conserva en `frontend-web/`.
+
+## Pruebas con Postman
+
+Importe `backend/postman/TaskEdu.postman_collection.json`. Ejecute primero
+"Login (usuario demo)": guarda el token en la variable `{{token}}`.
+Usuario de prueba (tras `npm run db:seed`): `demo@taskedu.com` / `Demo1234`.
