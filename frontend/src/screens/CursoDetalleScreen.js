@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Modal, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Modal, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { cursosApi, mensajeError, tareasApi } from '../api';
-import { Button, ErrorMsg, Loading, Vacio, colors, s } from '../ui';
+import Icon from '../components/Icon';
+import { Button, ErrorMsg, Loading, Vacio, colors, confirmarEliminar, s } from '../ui';
 import TareaCard from '../components/TareaCard';
 import TareaForm from '../components/TareaForm';
 import CursoForm from '../components/CursoForm';
@@ -49,78 +51,96 @@ export default function CursoDetalleScreen({ curso: cursoInicial, onClose }) {
   }
 
   const confirmarBorrarCurso = () =>
-    Alert.alert('Eliminar curso', 'Se eliminara el curso y todas sus tareas. Esta accion no se puede deshacer.', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Eliminar',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await cursosApi.eliminar(cursoInicial.id);
-            onClose();
-          } catch (e) {
-            setError(mensajeError(e));
-          }
-        },
-      },
-    ]);
+    confirmarEliminar('Eliminar curso', 'Se eliminara el curso y todas sus tareas. Esta accion no se puede deshacer.', async () => {
+      try {
+        await cursosApi.eliminar(cursoInicial.id);
+        onClose();
+      } catch (e) {
+        setError(mensajeError(e));
+      }
+    });
 
   return (
     <Modal animationType="slide" onRequestClose={onClose}>
-      <ScrollView
-        style={{ backgroundColor: colors.fondo }}
-        contentContainerStyle={{ padding: 20, paddingTop: 48, paddingBottom: 40 }}
-        keyboardShouldPersistTaps="handled"
-        refreshControl={
-          <RefreshControl refreshing={refrescando} onRefresh={async () => { setRefrescando(true); await cargar(); setRefrescando(false); }} />
-        }
-      >
-        <Button kind="fantasma" small title="← Volver a cursos" onPress={onClose} />
+      <SafeAreaProvider>
+        <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.fondo }}>
+          {/* Barra superior con volver */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4 }}>
+            <Pressable
+              onPress={onClose}
+              hitSlop={6}
+              accessibilityRole="button"
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 2,
+                minHeight: 44,
+                paddingHorizontal: 8,
+                borderRadius: 10,
+                backgroundColor: pressed ? colors.grisClaro : 'transparent',
+              })}
+            >
+              <Icon nombre="atras" tamano={20} color={colors.primario} />
+              <Text style={{ fontSize: 15, fontWeight: '600', color: colors.primario }}>Cursos</Text>
+            </Pressable>
+          </View>
 
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginTop: 16, marginBottom: 16 }}>
-          <View style={{ flex: 1 }}>
+          <ScrollView
+            contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 40 }}
+            keyboardShouldPersistTaps="handled"
+            refreshControl={
+              <RefreshControl
+                refreshing={refrescando}
+                tintColor={colors.primario}
+                colors={[colors.primario]}
+                onRefresh={async () => { setRefrescando(true); await cargar(); setRefrescando(false); }}
+              />
+            }
+          >
             <Text style={s.paginaTitulo}>{curso?.nombre}</Text>
             {curso?.docente ? <Text style={s.paginaSubtitulo}>Docente: {curso.docente}</Text> : null}
-          </View>
-        </View>
 
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-          <Button kind="secundario" small title="Editar curso" onPress={() => setFormCurso(true)} />
-          <Button kind="peligro" small title="Eliminar curso" onPress={confirmarBorrarCurso} />
-          <Button small title="Nueva tarea" onPress={() => setFormTarea({})} />
-        </View>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 16, marginBottom: 18 }}>
+              <Button small icono="mas" title="Nueva tarea" onPress={() => setFormTarea({})} />
+              <Button kind="secundario" small icono="editar" title="Editar curso" onPress={() => setFormCurso(true)} />
+              <Button kind="peligroSuave" small icono="borrar" title="Eliminar curso" onPress={confirmarBorrarCurso} />
+            </View>
 
-        {curso?.descripcion ? (
-          <View style={[s.tarjeta, { padding: 16, marginBottom: 18 }]}>
-            <Text style={{ color: colors.textoSuave }}>{curso.descripcion}</Text>
-          </View>
-        ) : null}
+            {curso?.descripcion ? (
+              <View style={[s.tarjeta, { padding: 16, marginBottom: 22 }]}>
+                <Text style={{ fontSize: 14, lineHeight: 21, color: colors.textoSuave }}>{curso.descripcion}</Text>
+              </View>
+            ) : null}
 
-        <Text style={{ fontSize: 17, fontWeight: '700', color: colors.texto, marginBottom: 12 }}>
-          Tareas del curso ({tareas?.length ?? 0})
-        </Text>
+            <Text style={[s.seccionTitulo, { marginBottom: 12 }]}>
+              Tareas del curso <Text style={[s.tabular, { color: colors.textoSuave, fontWeight: '600' }]}>({tareas?.length ?? 0})</Text>
+            </Text>
 
-        {error ? <ErrorMsg>{error}</ErrorMsg> : null}
+            {error ? <ErrorMsg>{error}</ErrorMsg> : null}
 
-        {!tareas && !error ? (
-          <Loading />
-        ) : tareas && tareas.length === 0 ? (
-          <Vacio icono="📝" titulo="Este curso no tiene tareas" mensaje="Crea una tarea para este curso.">
-            <Button title="Crear tarea" onPress={() => setFormTarea({})} />
-          </Vacio>
-        ) : (
-          tareas?.map((t) => (
-            <TareaCard
-              key={t.id}
-              tarea={t}
-              mostrarCurso={false}
-              onEstado={cambiarEstado}
-              onEdit={setFormTarea}
-              onDelete={eliminarTarea}
-            />
-          ))
-        )}
-      </ScrollView>
+            {!tareas && !error ? (
+              <Loading />
+            ) : tareas && tareas.length === 0 ? (
+              <View style={s.tarjeta}>
+                <Vacio icono="bandeja" titulo="Este curso no tiene tareas" mensaje="Crea una tarea para este curso.">
+                  <Button title="Crear tarea" icono="mas" onPress={() => setFormTarea({})} />
+                </Vacio>
+              </View>
+            ) : (
+              tareas?.map((t) => (
+                <TareaCard
+                  key={t.id}
+                  tarea={t}
+                  mostrarCurso={false}
+                  onEstado={cambiarEstado}
+                  onEdit={setFormTarea}
+                  onDelete={eliminarTarea}
+                />
+              ))
+            )}
+          </ScrollView>
+        </SafeAreaView>
+      </SafeAreaProvider>
 
       {formTarea ? (
         <TareaForm
