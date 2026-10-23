@@ -81,7 +81,7 @@ export default function TareaForm({ tarea, cursos, cursoIdInicial, onClose, onSa
       <ErrorMsg>{errorGeneral}</ErrorMsg>
 
       {cursos.length === 0 ? (
-        <Vacio icono="▦" titulo="Primero crea un curso" mensaje="Necesitas al menos un curso para registrar tareas." />
+        <Vacio icono="birrete" titulo="Primero crea un curso" mensaje="Necesitas al menos un curso para registrar tareas." />
       ) : (
         <>
           <Field

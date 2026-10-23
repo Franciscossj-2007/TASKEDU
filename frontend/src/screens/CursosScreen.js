@@ -1,31 +1,48 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { cursosApi, mensajeError } from '../api';
-import { Button, ErrorMsg, Loading, Vacio, colors, s } from '../ui';
+import Icon from '../components/Icon';
+import { BotonIcono, Button, EncabezadoPagina, ErrorMsg, Loading, Vacio, colors, confirmarEliminar, s } from '../ui';
 import CursoForm from '../components/CursoForm';
 import CursoDetalleScreen from './CursoDetalleScreen';
 
-// Tarjeta de curso replicando el .curso del web.
+// Tarjeta de curso replicando el .curso del web. La zona superior abre el detalle;
+// las acciones van aparte para no anidar botones.
 function CursoCard({ curso: c, onVer, onEditar, onEliminar }) {
   return (
-    <View style={[s.tarjeta, { padding: 20, gap: 8 }]}>
-      <Pressable onPress={() => onVer(c)}>
-        <Text style={{ fontSize: 17, fontWeight: '700', color: colors.texto }}>{c.nombre}</Text>
+    <View style={[s.tarjeta, { padding: 0, overflow: 'hidden' }]}>
+      <Pressable
+        onPress={() => onVer(c)}
+        accessibilityRole="button"
+        accessibilityLabel={`Ver tareas de ${c.nombre}`}
+        style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 14, padding: 18 }, pressed && { backgroundColor: colors.grisClaro }]}
+      >
+        <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.azulClaro, alignItems: 'center', justifyContent: 'center' }}>
+          <Icon nombre="birrete" tamano={22} color={colors.primario} />
+        </View>
+        <View style={{ flex: 1, gap: 4 }}>
+          <Text style={{ fontSize: 17, fontWeight: '700', color: colors.texto, letterSpacing: -0.2 }}>{c.nombre}</Text>
+          {c.docente ? (
+            <Text style={{ fontSize: 13, fontWeight: '600', color: colors.primarioOscuro }} numberOfLines={1}>
+              Docente: {c.docente}
+            </Text>
+          ) : null}
+          {c.descripcion ? (
+            <Text style={{ fontSize: 14, lineHeight: 20, color: colors.textoSuave, marginTop: 2 }} numberOfLines={2}>
+              {c.descripcion}
+            </Text>
+          ) : null}
+        </View>
+        <Icon nombre="derecha" tamano={18} color={colors.placeholder} />
       </Pressable>
-      {c.docente ? (
-        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.primarioOscuro }}>Docente: {c.docente}</Text>
-      ) : null}
-      {c.descripcion ? <Text style={{ fontSize: 14, color: colors.textoSuave }}>{c.descripcion}</Text> : null}
-      <Text style={{ fontSize: 13, color: colors.textoSuave }}>{c.total_tareas} tarea(s)</Text>
 
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.borde }}>
-        <Button kind="secundario" small title="Ver tareas" onPress={() => onVer(c)} />
-        <Pressable onPress={() => onEditar(c)} style={({ pressed }) => ({ marginLeft: 'auto', paddingVertical: 6, paddingHorizontal: 8, borderRadius: 6, backgroundColor: pressed ? colors.grisClaro : 'transparent' })} hitSlop={6}>
-          <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textoSuave }}>Editar</Text>
-        </Pressable>
-        <Pressable onPress={() => onEliminar(c)} style={({ pressed }) => ({ paddingVertical: 6, paddingHorizontal: 8, borderRadius: 6, backgroundColor: pressed ? colors.rojoClaro : 'transparent' })} hitSlop={6}>
-          <Text style={{ fontSize: 13, fontWeight: '600', color: colors.rojo }}>Eliminar</Text>
-        </Pressable>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 18, paddingRight: 8, paddingVertical: 6, borderTopWidth: 1, borderTopColor: colors.grisClaro }}>
+        <Icon nombre="tareas" tamano={15} color={colors.textoSuave} />
+        <Text style={[s.tabular, { fontSize: 13, color: colors.textoSuave, flex: 1, marginLeft: 4 }]}>
+          {c.total_tareas} {Number(c.total_tareas) === 1 ? 'tarea' : 'tareas'}
+        </Text>
+        <BotonIcono icono="editar" onPress={() => onEditar(c)} etiqueta="Editar curso" />
+        <BotonIcono icono="borrar" onPress={() => onEliminar(c)} color={colors.rojo} fondoPresionado={colors.rojoClaro} etiqueta="Eliminar curso" />
       </View>
     </View>
   );
@@ -50,46 +67,46 @@ export default function CursosScreen({ focused }) {
   useEffect(() => { if (focused) cargar(); }, [focused, cargar]);
 
   const confirmarBorrar = (curso) =>
-    Alert.alert('Eliminar curso', `Seguro que deseas eliminar el curso "${curso.nombre}"? Se eliminaran tambien sus tareas.`, [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Eliminar',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await cursosApi.eliminar(curso.id);
-            setCursos((actual) => actual.filter((c) => c.id !== curso.id));
-          } catch (e) {
-            setError(mensajeError(e));
-          }
-        },
+    confirmarEliminar(
+      'Eliminar curso',
+      `Seguro que deseas eliminar el curso "${curso.nombre}"? Se eliminaran tambien sus tareas.`,
+      async () => {
+        try {
+          await cursosApi.eliminar(curso.id);
+          setCursos((actual) => actual.filter((c) => c.id !== curso.id));
+        } catch (e) {
+          setError(mensajeError(e));
+        }
       },
-    ]);
+    );
 
   return (
     <View style={{ flex: 1 }}>
       <ScrollView
-        contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
+        contentContainerStyle={{ padding: 20, paddingBottom: 32 }}
         refreshControl={
-          <RefreshControl refreshing={refrescando} onRefresh={async () => { setRefrescando(true); await cargar(); setRefrescando(false); }} />
+          <RefreshControl
+            refreshing={refrescando}
+            tintColor={colors.primario}
+            colors={[colors.primario]}
+            onRefresh={async () => { setRefrescando(true); await cargar(); setRefrescando(false); }}
+          />
         }
       >
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 18 }}>
-          <View style={{ flex: 1 }}>
-            <Text style={s.paginaTitulo}>Mis cursos</Text>
-            <Text style={s.paginaSubtitulo}>Administra tus asignaturas y sus tareas</Text>
-          </View>
-          <Button title="Nuevo curso" small onPress={() => setForm({})} />
-        </View>
+        <EncabezadoPagina titulo="Mis cursos" subtitulo="Administra tus asignaturas y sus tareas">
+          <Button title="Nuevo" icono="mas" small onPress={() => setForm({})} />
+        </EncabezadoPagina>
 
         {error ? <ErrorMsg titulo="No se pudieron cargar los cursos">{error}</ErrorMsg> : null}
 
         {!cursos && !error ? (
           <Loading />
         ) : cursos && cursos.length === 0 ? (
-          <Vacio icono="▦" titulo="Aun no tienes cursos" mensaje="Crea tu primer curso para empezar a registrar tareas.">
-            <Button title="Crear curso" onPress={() => setForm({})} />
-          </Vacio>
+          <View style={s.tarjeta}>
+            <Vacio icono="birrete" titulo="Aun no tienes cursos" mensaje="Crea tu primer curso para empezar a registrar tareas.">
+              <Button title="Crear curso" icono="mas" onPress={() => setForm({})} />
+            </Vacio>
+          </View>
         ) : (
           cursos?.map((c) => (
             <CursoCard

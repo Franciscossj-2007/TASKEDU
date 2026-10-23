@@ -1,39 +1,69 @@
 import { useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import Animated from 'react-native-reanimated';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import Icon from './components/Icon';
+import Logo from './components/Logo';
 
-// Paleta identica a las variables CSS del frontend web (src/index.css).
+// Paleta azul de TaskEdu: azul de marca, celeste de acento y texto azul marino.
 export const colors = {
-  primario: '#4f46e5',
-  primarioOscuro: '#4338ca',
-  primarioClaro: '#eef2ff',
-  fondo: '#f5f6fb',
+  primario: '#0b66f0',
+  primarioOscuro: '#0a4fc4',
+  primarioClaro: '#eaf2ff',
+  primarioBorde: '#c9dcff',
+  acento: '#5cc8ff',
+  fondo: '#f4f8ff',
   superficie: '#ffffff',
-  texto: '#1f2937',
-  textoSuave: '#6b7280',
-  borde: '#e5e7eb',
-  rojo: '#dc2626',
-  rojoClaro: '#fee2e2',
+  tinta: '#0f2350',
+  texto: '#1a2b4c',
+  textoSuave: '#5d6b85',
+  placeholder: '#94a0b8',
+  borde: '#e1e8f5',
+  rojo: '#e11d48',
+  rojoClaro: '#ffe4e8',
+  rojoBorde: '#fecdd6',
   verde: '#16a34a',
   verdeClaro: '#dcfce7',
   ambar: '#b45309',
   ambarClaro: '#fef3c7',
-  azul: '#2563eb',
-  azulClaro: '#dbeafe',
-  gris: '#6b7280',
-  grisClaro: '#f3f4f6',
-  sidebar: '#1e1b4b',
-  sidebarTexto: '#e0e7ff',
-  sidebarEnlace: '#c7d2fe',
+  azul: '#0b66f0',
+  azulClaro: '#dbe8ff',
+  gris: '#5d6b85',
+  grisClaro: '#eff3fa',
+  // Fondos azules (inicio, cabecera de acceso).
+  sidebar: '#0a4fd6',
+  sidebarTexto: '#e6f0ff',
+  sidebarEnlace: '#cfe0ff',
 };
+
+// Sombra suave con desplazamiento, la unica elevacion de las tarjetas.
+export const sombra = Platform.select({
+  ios: { shadowColor: '#0b3a8f', shadowOpacity: 0.07, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } },
+  android: { elevation: 2 },
+  default: { boxShadow: '0 4px 14px rgba(11, 58, 143, 0.07)' },
+});
+
+// Tonos por estado para tarjetas de estadistica e iconos: fondo de tarjeta, circulo e icono.
+export const TONOS = {
+  azul: { fondo: '#f2f7ff', borde: '#dce8ff', circulo: '#dbe8ff', icono: '#0b66f0' },
+  ambar: { fondo: '#fff9ef', borde: '#fdebc8', circulo: '#ffedc9', icono: '#e58a00' },
+  turquesa: { fondo: '#f0fbf9', borde: '#cdeee8', circulo: '#d2f3ec', icono: '#0d9488' },
+  verde: { fondo: '#f1fbf4', borde: '#cfeed9', circulo: '#d6f5e0', icono: '#16a34a' },
+  rojo: { fondo: '#fff4f5', borde: '#fcd5dc', circulo: '#ffe1e6', icono: '#e11d48' },
+  violeta: { fondo: '#f6f4ff', borde: '#e0dafd', circulo: '#e6e0ff', icono: '#6d4ee8' },
+};
+
+// Numeros de ancho fijo para conteos y fechas.
+const tabular = { fontVariant: ['tabular-nums'] };
 
 // Colores de badge (fondo claro + texto oscuro) como en el web.
 export const BADGES = {
-  gris: { bg: '#f3f4f6', fg: '#4b5563' },
-  azul: { bg: '#dbeafe', fg: '#1e40af' },
+  gris: { bg: '#eff3fa', fg: '#4a5875' },
+  azul: { bg: '#dbe8ff', fg: '#0a4fc4' },
   verde: { bg: '#dcfce7', fg: '#15803d' },
-  rojo: { bg: '#fee2e2', fg: '#991b1b' },
+  rojo: { bg: '#ffe4e8', fg: '#be123c' },
   ambar: { bg: '#fef3c7', fg: '#b45309' },
-  primario: { bg: '#eef2ff', fg: '#4338ca' },
+  primario: { bg: '#eaf2ff', fg: '#0a4fc4' },
 };
 
 export const ESTADOS = {
@@ -105,21 +135,32 @@ export function etiquetaVencimiento(tarea) {
   return '';
 }
 
-// Marca "✓ TaskEdu" igual a .marca del web.
-export function Marca({ grande }) {
+// Confirmacion de una accion destructiva. Alert.alert no muestra botones en la web,
+// asi que ahi se usa el confirm del navegador.
+export function confirmarEliminar(titulo, mensaje, onAceptar, textoBoton = 'Eliminar') {
+  if (Platform.OS === 'web') {
+    if (window.confirm(mensaje)) onAceptar();
+    return;
+  }
+  Alert.alert(titulo, mensaje, [
+    { text: 'Cancelar', style: 'cancel' },
+    { text: textoBoton, style: 'destructive', onPress: onAceptar },
+  ]);
+}
+
+// Marca: isotipo + "Task" en azul marino y "Edu" en azul (o blanco + celeste sobre fondo azul).
+export function Marca({ grande, claro }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-      <View style={[s.logo, grande && { width: 44, height: 44, borderRadius: 12, fontSize: 24 }]}>
-        <Text style={{ color: '#fff', fontWeight: '700', fontSize: grande ? 24 : 20 }}>✓</Text>
-      </View>
-      <Text style={{ fontWeight: '700', fontSize: grande ? 22 : 20, color: colors.texto, letterSpacing: -0.4 }}>
-        TaskEdu
+      <Logo tamano={grande ? 44 : 36} />
+      <Text style={{ fontWeight: '800', fontSize: grande ? 24 : 21, color: claro ? '#fff' : colors.tinta, letterSpacing: -0.6 }}>
+        Task<Text style={{ color: claro ? colors.acento : colors.primario }}>Edu</Text>
       </Text>
     </View>
   );
 }
 
-export function Avatar({ nombre = '', tamano }) {
+export function Avatar({ nombre = '', tamano = 38 }) {
   const iniciales = nombre
     .trim()
     .split(/\s+/)
@@ -127,109 +168,191 @@ export function Avatar({ nombre = '', tamano }) {
     .map((parte) => parte[0]?.toUpperCase() ?? '')
     .join('');
   return (
-    <View style={[s.avatar, tamano && { width: tamano, height: tamano, fontSize: tamano / 2.6 }]}>
-      <Text style={{ color: '#fff', fontWeight: '700', fontSize: tamano ? tamano / 2.6 : 14 }}>{iniciales}</Text>
+    <View style={[s.avatar, { width: tamano, height: tamano, borderRadius: tamano / 2 }]}>
+      <Text style={{ color: colors.primarioOscuro, fontWeight: '700', fontSize: tamano / 2.6 }}>{iniciales}</Text>
     </View>
   );
 }
 
-export function Button({ title, onPress, kind = 'primario', small, bloque, cargando, disabled }) {
+// Pressable que se encoge levemente al tocarlo (retroalimentacion inmediata en press-in).
+export function Presionable({ style, contenedor, children, disabled, ...props }) {
+  const [presionado, setPresionado] = useState(false);
+  return (
+    <Pressable
+      {...props}
+      style={contenedor}
+      disabled={disabled}
+      onPressIn={(e) => { setPresionado(true); props.onPressIn?.(e); }}
+      onPressOut={(e) => { setPresionado(false); props.onPressOut?.(e); }}
+      pressRetentionOffset={16}
+    >
+      <Animated.View
+        style={[
+          style,
+          {
+            transform: [{ scale: presionado && !disabled ? 0.97 : 1 }],
+            transitionProperty: 'transform',
+            transitionDuration: 120,
+            transitionTimingFunction: 'ease-out',
+          },
+        ]}
+      >
+        {typeof children === 'function' ? children({ pressed: presionado }) : children}
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+export function Button({ title, onPress, kind = 'primario', small, bloque, cargando, disabled, icono }) {
   const bg =
     kind === 'primario' ? colors.primario :
     kind === 'peligro' ? colors.rojo :
     kind === 'secundario' ? colors.superficie :
+    kind === 'suave' ? colors.primarioClaro :
+    kind === 'peligroSuave' ? colors.rojoClaro :
     'transparent';
   const fg =
     kind === 'primario' || kind === 'peligro' ? '#fff' :
     kind === 'fantasma' ? colors.textoSuave :
+    kind === 'suave' ? colors.primarioOscuro :
+    kind === 'peligroSuave' ? '#b91c1c' :
     colors.texto;
+  const inactivo = disabled || cargando;
   return (
-    <Pressable
+    <Presionable
       onPress={onPress}
-      disabled={disabled || cargando}
-      style={({ pressed }) => [
+      disabled={inactivo}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !!inactivo, busy: !!cargando }}
+      hitSlop={small ? 6 : 0}
+      contenedor={bloque && { alignSelf: 'stretch' }}
+      style={[
         s.btn,
         kind === 'secundario' && { borderColor: colors.borde },
         small && s.btnSm,
-        bloque && { width: '100%' },
-        { backgroundColor: bg, opacity: disabled || cargando ? 0.6 : pressed ? 0.85 : 1 },
+        { backgroundColor: bg, opacity: disabled ? 0.5 : 1 },
       ]}
     >
       {cargando ? (
         <ActivityIndicator size="small" color={fg} />
       ) : (
-        <Text style={{ color: fg, fontWeight: '600', fontSize: small ? 13 : 14 }}>{title}</Text>
+        <>
+          {icono ? <Icon nombre={icono} tamano={small ? 16 : 18} color={fg} /> : null}
+          <Text style={{ color: fg, fontWeight: '600', fontSize: small ? 13 : 15 }}>{title}</Text>
+        </>
       )}
+    </Presionable>
+  );
+}
+
+// Boton cuadrado solo con icono (editar, eliminar, cerrar...). Area tactil de 44 pt.
+export function BotonIcono({ icono, onPress, color = colors.textoSuave, fondoPresionado = colors.grisClaro, etiqueta }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={6}
+      accessibilityRole="button"
+      accessibilityLabel={etiqueta}
+      style={({ pressed }) => [s.botonIcono, pressed && { backgroundColor: fondoPresionado }]}
+    >
+      <Icon nombre={icono} tamano={18} color={color} />
     </Pressable>
   );
 }
 
 // Campo con etiqueta, asterisco de requerido, ayuda y error, como .campo del web.
-export function Field({ label, requerido, error, ayuda, style, ...props }) {
+export function Field({ label, requerido, error, ayuda, style, icono, ...props }) {
+  const [enfocado, setEnfocado] = useState(false);
   return (
     <View style={[{ marginBottom: 16 }, style]}>
-      <Text style={s.label}>
-        {label}
-        {requerido ? <Text style={{ color: colors.rojo }}> *</Text> : null}
-      </Text>
-      <TextInput
-        placeholderTextColor="#9ca3af"
-        {...props}
-        style={[s.entrada, props.multiline && { height: 88, textAlignVertical: 'top' }, error && { borderColor: colors.rojo }]}
-      />
-      {ayuda ? <Text style={s.ayuda}>{ayuda}</Text> : null}
+      {label ? (
+        <Text style={s.label}>
+          {label}
+          {requerido ? <Text style={{ color: colors.rojo }}> *</Text> : null}
+        </Text>
+      ) : null}
+      <View style={{ justifyContent: 'center' }}>
+        {icono ? (
+          <View style={{ position: 'absolute', left: 12, zIndex: 1 }} pointerEvents="none">
+            <Icon nombre={icono} tamano={18} color={enfocado ? colors.primario : colors.placeholder} />
+          </View>
+        ) : null}
+        <TextInput
+          placeholderTextColor={colors.placeholder}
+          {...props}
+          onFocus={(e) => { setEnfocado(true); props.onFocus?.(e); }}
+          onBlur={(e) => { setEnfocado(false); props.onBlur?.(e); }}
+          style={[
+            s.entrada,
+            icono && { paddingLeft: 40 },
+            props.multiline && { minHeight: 96, textAlignVertical: 'top', paddingTop: 12 },
+            enfocado && s.entradaEnfocada,
+            error && { borderColor: colors.rojo },
+          ]}
+        />
+      </View>
+      {ayuda && !error ? <Text style={s.ayuda}>{ayuda}</Text> : null}
       {error ? <Text style={s.errorCampo}>{error}</Text> : null}
     </View>
   );
 }
 
 // Select modal (equivalente al <select> del web).
-export function SelectCampo({ label, requerido, value, opciones, placeholder = 'Selecciona', onChange, error }) {
-  const actual = opciones.find((o) => String(o.valor) === String(value));
+export function SelectCampo({ label, requerido, value, opciones, placeholder = 'Selecciona', onChange, error, style }) {
   return (
-    <View style={{ marginBottom: 16 }}>
+    <View style={[{ marginBottom: 16 }, style]}>
       <Text style={s.label}>
         {label}
         {requerido ? <Text style={{ color: colors.rojo }}> *</Text> : null}
       </Text>
-      <SelectValor value={value} opciones={opciones} placeholder={placeholder} onChange={onChange} error={error} />
+      <SelectValor value={value} opciones={opciones} placeholder={placeholder} onChange={onChange} error={error} titulo={label} />
       {error ? <Text style={s.errorCampo}>{error}</Text> : null}
     </View>
   );
 }
 
-export function SelectValor({ value, opciones, placeholder = 'Selecciona', onChange, error, compacto }) {
+export function SelectValor({ value, opciones, placeholder = 'Selecciona', onChange, error, compacto, titulo }) {
   const [abierto, setAbierto] = useState(false);
   const actual = opciones.find((o) => String(o.valor) === String(value));
   return (
     <>
       <Pressable
         onPress={() => setAbierto(true)}
-        style={[compacto ? s.selectCompacto : s.entrada, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, error && { borderColor: colors.rojo }]}
+        accessibilityRole="button"
+        accessibilityLabel={titulo ? `${titulo}: ${actual ? actual.etiqueta : placeholder}` : undefined}
+        style={({ pressed }) => [
+          compacto ? s.selectCompacto : s.entrada,
+          { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+          pressed && { backgroundColor: colors.grisClaro },
+          error && { borderColor: colors.rojo },
+        ]}
       >
-        <Text style={{ fontSize: compacto ? 13 : 14, color: actual ? colors.texto : '#9ca3af' }}>
+        <Text style={{ fontSize: compacto ? 13 : 15, color: actual ? colors.texto : colors.placeholder, flexShrink: 1 }} numberOfLines={1}>
           {actual ? actual.etiqueta : placeholder}
         </Text>
-        <Text style={{ color: colors.textoSuave, fontSize: 12 }}>▾</Text>
+        <Icon nombre="abajo" tamano={16} color={colors.textoSuave} />
       </Pressable>
       <Modal visible={abierto} transparent animationType="fade" onRequestClose={() => setAbierto(false)}>
         <Pressable style={s.modalVelado} onPress={() => setAbierto(false)}>
-          <View style={s.selectCaja}>
-            {opciones.map((o) => {
-              const activo = String(o.valor) === String(value);
-              return (
-                <Pressable
-                  key={o.valor}
-                  onPress={() => { setAbierto(false); onChange?.(o.valor); }}
-                  style={[s.selectFila, activo && { backgroundColor: colors.primarioClaro }]}
-                >
-                  <Text style={{ fontSize: 15, color: activo ? colors.primarioOscuro : colors.texto, fontWeight: activo ? '700' : '400' }}>
-                    {o.etiqueta}
-                  </Text>
-                  {activo ? <Text style={{ color: colors.primario }}>✓</Text> : null}
-                </Pressable>
-              );
-            })}
+          <View style={[s.selectCaja, sombra]}>
+            {titulo ? <Text style={s.selectTitulo}>{titulo}</Text> : null}
+            <ScrollView style={{ maxHeight: 360 }}>
+              {opciones.map((o) => {
+                const activo = String(o.valor) === String(value);
+                return (
+                  <Pressable
+                    key={o.valor}
+                    onPress={() => { setAbierto(false); onChange?.(o.valor); }}
+                    style={({ pressed }) => [s.selectFila, (activo || pressed) && { backgroundColor: colors.primarioClaro }]}
+                  >
+                    <Text style={{ fontSize: 15, color: activo ? colors.primarioOscuro : colors.texto, fontWeight: activo ? '700' : '400', flexShrink: 1 }}>
+                      {o.etiqueta}
+                    </Text>
+                    {activo ? <Icon nombre="check" tamano={18} color={colors.primario} /> : null}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
           </View>
         </Pressable>
       </Modal>
@@ -258,12 +381,26 @@ export function Badge({ color = 'gris', punto, children }) {
   );
 }
 
+// Barra de progreso: el relleno es absoluto y sin hijos, asi animar su ancho no recalcula el resto.
 export function Progreso({ valor, max, color = 'primario' }) {
   const total = max || 1;
   const porcentaje = Math.max(0, Math.min(100, (valor / total) * 100));
   return (
     <View style={s.progreso}>
-      <View style={{ height: 8, borderRadius: 999, width: `${porcentaje}%`, backgroundColor: color === 'verde' ? colors.verde : colors.primario }} />
+      <Animated.View
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          bottom: 0,
+          borderRadius: 999,
+          width: `${porcentaje}%`,
+          backgroundColor: color === 'verde' ? colors.verde : colors.primario,
+          transitionProperty: 'width',
+          transitionDuration: 300,
+          transitionTimingFunction: 'ease-out',
+        }}
+      />
     </View>
   );
 }
@@ -278,18 +415,23 @@ export const Loading = () => (
 export function ErrorMsg({ titulo, children, tipo = 'error' }) {
   if (!children) return null;
   const info = tipo === 'info';
+  const fg = info ? '#1e40af' : '#991b1b';
   return (
     <View
+      accessibilityRole="alert"
       style={[
         s.alerta,
         {
           backgroundColor: info ? colors.azulClaro : colors.rojoClaro,
-          borderColor: info ? '#bfdbfe' : '#fecaca',
+          borderColor: info ? '#bfdbfe' : colors.rojoBorde,
         },
       ]}
     >
-      {titulo ? <Text style={{ fontWeight: '700', marginBottom: 2, color: info ? '#1e40af' : '#991b1b' }}>{titulo}</Text> : null}
-      <Text style={{ fontSize: 14, color: info ? '#1e40af' : '#991b1b' }}>{children}</Text>
+      <Icon nombre="alerta" tamano={18} color={fg} />
+      <View style={{ flex: 1 }}>
+        {titulo ? <Text style={{ fontWeight: '700', marginBottom: 2, color: fg }}>{titulo}</Text> : null}
+        <Text style={{ fontSize: 14, lineHeight: 20, color: fg }}>{children}</Text>
+      </View>
     </View>
   );
 }
@@ -297,71 +439,84 @@ export function ErrorMsg({ titulo, children, tipo = 'error' }) {
 // Estado vacio con icono, titulo, mensaje y accion, como EstadoVacio del web.
 export function Vacio({ icono, titulo, mensaje, children }) {
   return (
-    <View style={{ alignItems: 'center', padding: 32 }}>
-      {icono ? <Text style={{ fontSize: 40, marginBottom: 12 }}>{icono}</Text> : null}
-      <Text style={{ fontSize: 18, fontWeight: '600', color: colors.texto, marginBottom: 6 }}>{titulo}</Text>
-      <Text style={{ fontSize: 14, color: colors.textoSuave, textAlign: 'center', marginBottom: 18 }}>{mensaje}</Text>
+    <View style={{ alignItems: 'center', paddingVertical: 28, paddingHorizontal: 16 }}>
+      {icono ? (
+        <View style={s.vacioIcono}>
+          <Icon nombre={icono} tamano={26} color={colors.primario} />
+        </View>
+      ) : null}
+      <Text style={{ fontSize: 17, fontWeight: '700', color: colors.texto, marginBottom: 6, textAlign: 'center' }}>{titulo}</Text>
+      <Text style={{ fontSize: 14, lineHeight: 20, color: colors.textoSuave, textAlign: 'center', marginBottom: children ? 18 : 0, maxWidth: 300 }}>
+        {mensaje}
+      </Text>
       {children}
     </View>
   );
 }
 
-// Modal con cabecera, cuerpo y pie, como .modal del web.
+// Formulario modal: en iOS es una hoja nativa (se cierra deslizando), en Android pantalla completa.
 export function ModalUI({ visible, titulo, onCerrar, children, pie }) {
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onCerrar}>
-      <View style={{ flex: 1, backgroundColor: colors.fondo, padding: 16, paddingTop: 48 }}>
-        <View style={s.modal}>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle={Platform.OS === 'ios' ? 'pageSheet' : 'fullScreen'}
+      onRequestClose={onCerrar}
+    >
+      <SafeAreaProvider>
+        <SafeAreaView edges={Platform.OS === 'ios' ? ['bottom'] : ['top', 'bottom']} style={{ flex: 1, backgroundColor: colors.superficie }}>
           <View style={s.modalCabecera}>
-            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.texto }}>{titulo}</Text>
-            <Pressable onPress={onCerrar} hitSlop={10}>
-              <Text style={{ fontSize: 26, lineHeight: 28, color: colors.textoSuave }}>×</Text>
-            </Pressable>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.texto, flex: 1 }} numberOfLines={1}>
+              {titulo}
+            </Text>
+            <BotonIcono icono="cerrar" onPress={onCerrar} etiqueta="Cerrar" />
           </View>
-          <ScrollView contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
+          <ScrollView contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled" style={{ flex: 1 }}>
             {children}
           </ScrollView>
           {pie ? <View style={s.modalPie}>{pie}</View> : null}
-        </View>
-      </View>
+        </SafeAreaView>
+      </SafeAreaProvider>
     </Modal>
   );
 }
 
+// Encabezado de pagina: titulo, subtitulo y accion principal a la derecha.
+export function EncabezadoPagina({ titulo, subtitulo, children }) {
+  return (
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12, marginBottom: 20 }}>
+      <View style={{ flex: 1 }}>
+        <Text style={s.paginaTitulo}>{titulo}</Text>
+        {subtitulo ? <Text style={s.paginaSubtitulo}>{subtitulo}</Text> : null}
+      </View>
+      {children}
+    </View>
+  );
+}
+
 export const s = StyleSheet.create({
-  logo: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: colors.primario,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   avatar: {
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: colors.primario,
+    backgroundColor: colors.primarioClaro,
+    borderWidth: 1,
+    borderColor: colors.primarioBorde,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sombra: {
-    shadowColor: '#0f172a',
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 2,
-  },
   tarjeta: {
     backgroundColor: colors.superficie,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: colors.borde,
-    borderRadius: 12,
     padding: 18,
     marginBottom: 14,
+    ...sombra,
   },
-  paginaTitulo: { fontSize: 26, fontWeight: '700', color: colors.texto, letterSpacing: -0.5 },
-  paginaSubtitulo: { fontSize: 14, color: colors.textoSuave, marginTop: 4 },
+  seccionTitulo: { fontSize: 18, fontWeight: '800', color: colors.tinta, letterSpacing: -0.3 },
+  paginaTitulo: { fontSize: 27, fontWeight: '800', color: colors.tinta, letterSpacing: -0.7 },
+  paginaSubtitulo: { fontSize: 14, lineHeight: 20, color: colors.textoSuave, marginTop: 4 },
   btn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -369,47 +524,79 @@ export const s = StyleSheet.create({
     gap: 8,
     borderWidth: 1,
     borderColor: 'transparent',
-    borderRadius: 8,
+    borderRadius: 10,
+    minHeight: 44,
     paddingVertical: 10,
     paddingHorizontal: 16,
   },
-  btnSm: { paddingVertical: 7, paddingHorizontal: 12 },
+  btnSm: { minHeight: 36, paddingVertical: 7, paddingHorizontal: 12, borderRadius: 9, gap: 6 },
+  botonIcono: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   label: { fontSize: 13, fontWeight: '600', color: colors.texto, marginBottom: 6 },
-  ayuda: { fontSize: 12, color: colors.textoSuave, marginTop: 4 },
-  errorCampo: { fontSize: 12, color: colors.rojo, fontWeight: '500', marginTop: 4 },
+  ayuda: { fontSize: 12, color: colors.textoSuave, marginTop: 5 },
+  errorCampo: { fontSize: 12, color: colors.rojo, fontWeight: '500', marginTop: 5 },
   entrada: {
     width: '100%',
+    minHeight: 46,
     borderWidth: 1,
     borderColor: colors.borde,
-    borderRadius: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    fontSize: 14,
+    borderRadius: 10,
+    paddingVertical: 11,
+    paddingHorizontal: 14,
+    fontSize: 15,
     backgroundColor: '#fff',
     color: colors.texto,
   },
+  entradaEnfocada: {
+    borderColor: colors.primario,
+    backgroundColor: '#fcfcff',
+  },
   selectCompacto: {
+    minHeight: 36,
     borderWidth: 1,
     borderColor: colors.borde,
-    borderRadius: 8,
+    borderRadius: 9,
     paddingVertical: 7,
     paddingHorizontal: 10,
     backgroundColor: '#fff',
-    minWidth: 120,
+    minWidth: 128,
   },
   modalVelado: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.5)',
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
     justifyContent: 'center',
     paddingHorizontal: 24,
   },
-  selectCaja: { backgroundColor: '#fff', borderRadius: 12, overflow: 'hidden', paddingVertical: 6 },
+  selectCaja: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    overflow: 'hidden',
+    paddingVertical: 8,
+    width: '100%',
+    maxWidth: 420,
+    alignSelf: 'center',
+  },
+  selectTitulo: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textoSuave,
+    paddingHorizontal: 18,
+    paddingTop: 8,
+    paddingBottom: 6,
+  },
   selectFila: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 13,
-    paddingHorizontal: 16,
+    gap: 12,
+    minHeight: 48,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
   },
   chip: {
     paddingVertical: 6,
@@ -438,10 +625,22 @@ export const s = StyleSheet.create({
     overflow: 'hidden',
   },
   alerta: {
-    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    borderRadius: 12,
     padding: 12,
     borderWidth: 1,
     marginBottom: 16,
+  },
+  vacioIcono: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: colors.primarioClaro,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
   },
   header: {
     flexDirection: 'row',
@@ -449,67 +648,67 @@ export const s = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 12,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 10,
     backgroundColor: colors.superficie,
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borde,
+  },
+  campanaPunto: {
+    position: 'absolute',
+    top: 9,
+    right: 10,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.rojo,
+    borderWidth: 2,
+    borderColor: colors.superficie,
   },
   tabbar: {
     flexDirection: 'row',
-    backgroundColor: colors.sidebar,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: colors.superficie,
+    paddingTop: 8,
+    paddingHorizontal: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borde,
   },
   tab: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 12,
-    gap: 2,
+    paddingHorizontal: 6,
   },
-  tabActivo: {
-    backgroundColor: colors.primario,
-    borderRadius: 10,
-    margin: 6,
-    paddingVertical: 8,
+  tabPastilla: {
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    gap: 3,
+    paddingVertical: 7,
+    borderRadius: 14,
+    minHeight: 52,
   },
-  authMarca: {
-    backgroundColor: colors.primario,
-    padding: 32,
-    paddingTop: 48,
-    borderBottomLeftRadius: 18,
-    borderBottomRightRadius: 18,
-    gap: 16,
-  },
-  authTitulo: { fontSize: 28, fontWeight: '700', color: '#fff', lineHeight: 34, letterSpacing: -0.5 },
-  authTexto: { fontSize: 15, color: '#fff', opacity: 0.9, lineHeight: 22 },
-  authItem: { flexDirection: 'row', gap: 10, fontSize: 14, color: '#fff' },
-  modal: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    width: '100%',
-    maxWidth: 520,
-    maxHeight: '92%',
-    alignSelf: 'center',
-    overflow: 'hidden',
+  tabPastillaActiva: {
+    backgroundColor: colors.primarioClaro,
   },
   modalCabecera: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
+    gap: 12,
+    paddingVertical: 10,
+    paddingLeft: 20,
+    paddingRight: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borde,
   },
   modalPie: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
     gap: 10,
-    paddingVertical: 14,
+    paddingVertical: 12,
     paddingHorizontal: 20,
-    borderTopWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.borde,
   },
   fila: { flexDirection: 'row', gap: 12 },
   filaItem: { flex: 1 },
+  tabular,
 });

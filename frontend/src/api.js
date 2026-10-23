@@ -8,9 +8,15 @@ const PUERTO_API = 3000;
 // URL de la API. Prioridad: variable EXPO_PUBLIC_API_URL; si no existe, se usa
 // la IP del PC que sirve Expo (la misma red WiFi que el movil) con el puerto 3000.
 function resolverBaseUrl() {
-  if (process.env.EXPO_PUBLIC_API_URL) return process.env.EXPO_PUBLIC_API_URL;
+  const envUrl = process.env.EXPO_PUBLIC_API_URL;
+  if (Platform.OS === 'web') {
+    return envUrl || `http://localhost:${PUERTO_API}/api`;
+  }
+  if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
+    return envUrl;
+  }
   const hostUri = Constants.expoConfig?.hostUri || Constants.expoGoConfig?.debuggerHost;
-  const host = hostUri ? hostUri.split(':')[0] : 'localhost';
+  const host = hostUri ? hostUri.split(':')[0] : '192.168.137.75';
   return `http://${host}:${PUERTO_API}/api`;
 }
 
