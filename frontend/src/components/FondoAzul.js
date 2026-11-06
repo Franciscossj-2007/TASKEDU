@@ -1,24 +1,30 @@
 import { StyleSheet } from 'react-native';
-import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, LinearGradient, RadialGradient, Rect, Stop } from 'react-native-svg';
 
-// Fondo azul de marca: degradado diagonal con dos formas suaves y,
-// opcionalmente, una ola clara en el borde inferior (cabecera de acceso).
-export default function FondoAzul({ ola }) {
+// Fondo de marca "Atardecer": degradado diagonal rosa -> coral -> naranja con brillos suaves.
+// (Se conserva el nombre del archivo para no romper los imports existentes.)
+export default function FondoAzul() {
   return (
-    <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" viewBox="0 0 400 400" preserveAspectRatio="xMidYMid slice">
+    <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" viewBox="0 0 400 800" preserveAspectRatio="xMidYMid slice">
       <Defs>
-        <LinearGradient id="fondoAzul" x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0" stopColor="#0a4fd6" />
-          <Stop offset="0.55" stopColor="#0b66f0" />
-          <Stop offset="1" stopColor="#3b8bff" />
+        <LinearGradient id="fondoAtardecer" x1="0" y1="0" x2="1" y2="1">
+          <Stop offset="0" stopColor="#ff5470" />
+          <Stop offset="0.5" stopColor="#ff6b4a" />
+          <Stop offset="1" stopColor="#ffb020" />
         </LinearGradient>
+        <RadialGradient id="brilloDorado" cx="0.5" cy="0.5" r="0.5">
+          <Stop offset="0" stopColor="#ffe0a8" stopOpacity="0.75" />
+          <Stop offset="1" stopColor="#ffe0a8" stopOpacity="0" />
+        </RadialGradient>
+        <RadialGradient id="brilloRosa" cx="0.5" cy="0.5" r="0.5">
+          <Stop offset="0" stopColor="#ff3d6e" stopOpacity="0.6" />
+          <Stop offset="1" stopColor="#ff3d6e" stopOpacity="0" />
+        </RadialGradient>
       </Defs>
-      <Rect width="400" height="400" fill="url(#fondoAzul)" />
-      <Circle cx="-30" cy="40" r="170" fill="#ffffff" fillOpacity="0.07" />
-      <Circle cx="430" cy="120" r="150" fill="#ffffff" fillOpacity="0.06" />
-      {ola ? (
-        <Path d="M0 360 C 90 330, 150 395, 250 372 S 360 330, 400 350 L400 400 L0 400 Z" fill="#ffffff" fillOpacity="0.12" />
-      ) : null}
+      <Rect width="400" height="800" fill="url(#fondoAtardecer)" />
+      <Circle cx="340" cy="60" r="220" fill="url(#brilloDorado)" />
+      <Circle cx="20" cy="720" r="240" fill="url(#brilloRosa)" />
+      <Circle cx="360" cy="700" r="140" fill="url(#brilloDorado)" />
     </Svg>
   );
 }

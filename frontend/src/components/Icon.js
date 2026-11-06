@@ -1,3 +1,4 @@
+import { Platform, View } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
 // Juego de iconos de trazo (24x24, trazo 2, extremos redondeados) para toda la app.
@@ -157,6 +158,39 @@ const ICONOS = {
     </>
   ),
   flecha: <Path d="M5 12h14M13 6l6 6-6 6" />,
+  inicio: (
+    <>
+      <Path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+      <Path d="M9 22V12h6v10" />
+    </>
+  ),
+  listaCheck: (
+    <>
+      <Path d="M3 17l2 2 4-4M3 7l2 2 4-4" />
+      <Path d="M13 6h8M13 12h8M13 18h8" />
+    </>
+  ),
+  cuadricula: (
+    <>
+      <Rect x="3" y="3" width="7" height="7" rx="1" />
+      <Rect x="14" y="3" width="7" height="7" rx="1" />
+      <Rect x="3" y="14" width="7" height="7" rx="1" />
+      <Rect x="14" y="14" width="7" height="7" rx="1" />
+    </>
+  ),
+  lista: <Path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />,
+  puntos: (
+    <>
+      <Circle cx="5" cy="12" r="1" />
+      <Circle cx="12" cy="12" r="1" />
+      <Circle cx="19" cy="12" r="1" />
+    </>
+  ),
+  marcador: <Path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" />,
+  llama: (
+    <Path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z" />
+  ),
+  ordenar: <Path d="M3 16l4 4 4-4M7 20V4M11 4h10M11 8h7M11 12h4" />,
   fiesta: (
     <>
       <Path d="M5.8 11.3L2 22l10.7-3.79" />
@@ -168,8 +202,8 @@ const ICONOS = {
 };
 
 // relleno: rellena las formas con el mismo color (para la pestaña activa).
-export default function Icon({ nombre, tamano = 20, color = '#1a2b4c', grosor = 2, relleno }) {
-  return (
+export default function Icon({ nombre, tamano = 20, color = '#2b1a12', grosor = 2, relleno }) {
+  const svg = (
     <Svg
       width={tamano}
       height={tamano}
@@ -183,4 +217,7 @@ export default function Icon({ nombre, tamano = 20, color = '#1a2b4c', grosor = 
       {ICONOS[nombre] ?? ICONOS.circulo}
     </Svg>
   );
+  // En web un <svg> suelto queda debajo de los fondos posicionados (como Degradado);
+  // envolverlo en una vista lo mantiene encima.
+  return Platform.OS === 'web' ? <View pointerEvents="none" style={{ width: tamano, height: tamano }}>{svg}</View> : svg;
 }
