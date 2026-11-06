@@ -1,50 +1,46 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { cursosApi, mensajeError } from '../api';
 import Icon from '../components/Icon';
-import { BotonIcono, Button, EncabezadoPagina, ErrorMsg, Loading, Vacio, colors, confirmarEliminar, s } from '../ui';
+import Degradado from '../components/Degradado';
+import { Button, ErrorMsg, Loading, Presionable, Vacio, colors, gradienteCurso, s, sombraCoral } from '../ui';
 import CursoForm from '../components/CursoForm';
 import CursoDetalleScreen from './CursoDetalleScreen';
 
-// Tarjeta de curso replicando el .curso del web. La zona superior abre el detalle;
-// las acciones van aparte para no anidar botones.
-function CursoCard({ curso: c, onVer, onEditar, onEliminar }) {
+const ICONOS_CURSO = ['libroAbierto', 'birrete', 'documento', 'capas', 'rayo', 'panel'];
+
+// Mosaico de curso con portada en degradado, icono grande translúcido, conteo de tareas y docente.
+function CursoTile({ curso: c, indice, onVer }) {
+  const total = Number(c.total_tareas) || 0;
   return (
-    <View style={[s.tarjeta, { padding: 0, overflow: 'hidden' }]}>
-      <Pressable
+    <Animated.View entering={FadeInDown.delay(Math.min(indice, 8) * 70).springify().damping(15)} style={{ flex: 1 }}>
+      <Presionable
         onPress={() => onVer(c)}
         accessibilityRole="button"
-        accessibilityLabel={`Ver tareas de ${c.nombre}`}
-        style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 14, padding: 18 }, pressed && { backgroundColor: colors.grisClaro }]}
+        accessibilityLabel={`Ver ${c.nombre}`}
+        style={{ height: 210, borderRadius: 26, overflow: 'hidden', padding: 14, justifyContent: 'space-between' }}
       >
-        <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.azulClaro, alignItems: 'center', justifyContent: 'center' }}>
-          <Icon nombre="birrete" tamano={22} color={colors.primario} />
+        <Degradado colores={gradienteCurso(c.id)} />
+        <View style={{ position: 'absolute', right: -16, top: -8, opacity: 0.22, transform: [{ rotate: '-10deg' }] }}>
+          <Icon nombre={ICONOS_CURSO[Math.abs(Number(c.id) || 0) % ICONOS_CURSO.length]} tamano={120} color="#fff" grosor={1.4} />
         </View>
-        <View style={{ flex: 1, gap: 4 }}>
-          <Text style={{ fontSize: 17, fontWeight: '700', color: colors.texto, letterSpacing: -0.2 }}>{c.nombre}</Text>
+        <View style={{ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.24)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' }}>
+          <Icon nombre={total ? 'tareas' : 'check'} tamano={12} color="#fff" grosor={2.6} />
+          <Text style={{ color: '#fff', fontSize: 11, fontWeight: '800' }}>{total ? `${total} ${total === 1 ? 'tarea' : 'tareas'}` : 'Sin tareas'}</Text>
+        </View>
+        <View>
+          <Text style={{ color: '#fff', fontSize: 19, lineHeight: 22, fontWeight: '800', letterSpacing: -0.5 }} numberOfLines={2}>
+            {c.nombre}
+          </Text>
           {c.docente ? (
-            <Text style={{ fontSize: 13, fontWeight: '600', color: colors.primarioOscuro }} numberOfLines={1}>
-              Docente: {c.docente}
-            </Text>
-          ) : null}
-          {c.descripcion ? (
-            <Text style={{ fontSize: 14, lineHeight: 20, color: colors.textoSuave, marginTop: 2 }} numberOfLines={2}>
-              {c.descripcion}
+            <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 11, fontWeight: '700', marginTop: 3 }} numberOfLines={1}>
+              {c.docente}
             </Text>
           ) : null}
         </View>
-        <Icon nombre="derecha" tamano={18} color={colors.placeholder} />
-      </Pressable>
-
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 18, paddingRight: 8, paddingVertical: 6, borderTopWidth: 1, borderTopColor: colors.grisClaro }}>
-        <Icon nombre="tareas" tamano={15} color={colors.textoSuave} />
-        <Text style={[s.tabular, { fontSize: 13, color: colors.textoSuave, flex: 1, marginLeft: 4 }]}>
-          {c.total_tareas} {Number(c.total_tareas) === 1 ? 'tarea' : 'tareas'}
-        </Text>
-        <BotonIcono icono="editar" onPress={() => onEditar(c)} etiqueta="Editar curso" />
-        <BotonIcono icono="borrar" onPress={() => onEliminar(c)} color={colors.rojo} fondoPresionado={colors.rojoClaro} etiqueta="Eliminar curso" />
-      </View>
-    </View>
+      </Presionable>
+    </Animated.View>
   );
 }
 
@@ -54,6 +50,7 @@ export default function CursosScreen({ focused }) {
   const [form, setForm] = useState(null);
   const [detalle, setDetalle] = useState(null);
   const [refrescando, setRefrescando] = useState(false);
+  const [busqueda, setBusqueda] = useState('');
 
   const cargar = useCallback(async () => {
     setError('');
@@ -66,24 +63,21 @@ export default function CursosScreen({ focused }) {
 
   useEffect(() => { if (focused) cargar(); }, [focused, cargar]);
 
-  const confirmarBorrar = (curso) =>
-    confirmarEliminar(
-      'Eliminar curso',
-      `Seguro que deseas eliminar el curso "${curso.nombre}"? Se eliminaran tambien sus tareas.`,
-      async () => {
-        try {
-          await cursosApi.eliminar(curso.id);
-          setCursos((actual) => actual.filter((c) => c.id !== curso.id));
-        } catch (e) {
-          setError(mensajeError(e));
-        }
-      },
-    );
+  const texto = busqueda.trim().toLowerCase();
+  const filtrados = (cursos ?? []).filter(
+    (c) => !texto || c.nombre.toLowerCase().includes(texto) || (c.docente ?? '').toLowerCase().includes(texto),
+  );
+  const totalTareas = (cursos ?? []).reduce((suma, c) => suma + (Number(c.total_tareas) || 0), 0);
+
+  // Agrupa en filas de dos para la cuadrícula.
+  const filas = [];
+  for (let i = 0; i < filtrados.length; i += 2) filas.push(filtrados.slice(i, i + 2));
 
   return (
     <View style={{ flex: 1 }}>
       <ScrollView
-        contentContainerStyle={{ padding: 20, paddingBottom: 32 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+        keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl
             refreshing={refrescando}
@@ -93,9 +87,40 @@ export default function CursosScreen({ focused }) {
           />
         }
       >
-        <EncabezadoPagina titulo="Mis cursos" subtitulo="Administra tus asignaturas y sus tareas">
-          <Button title="Nuevo" icono="mas" small onPress={() => setForm({})} />
-        </EncabezadoPagina>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.paginaTitulo}>Mis cursos</Text>
+            <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textoSuave, marginTop: 2 }}>
+              {cursos ? `${cursos.length} ${cursos.length === 1 ? 'curso' : 'cursos'} · ${totalTareas} tareas` : 'Cargando...'}
+            </Text>
+          </View>
+          <Pressable
+            onPress={() => setForm({})}
+            accessibilityRole="button"
+            accessibilityLabel="Nuevo curso"
+            style={({ pressed }) => [{ width: 46, height: 46, borderRadius: 16, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', transform: [{ scale: pressed ? 0.94 : 1 }] }, sombraCoral]}
+          >
+            <Degradado radio={16} />
+            <Icon nombre="mas" tamano={24} color="#fff" grosor={2.6} />
+          </Pressable>
+        </View>
+
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, borderRadius: 16, backgroundColor: colors.hundido, marginBottom: 16 }}>
+          <Icon nombre="buscar" tamano={20} color={colors.textoSuave} />
+          <TextInput
+            value={busqueda}
+            onChangeText={setBusqueda}
+            placeholder="Buscar curso o docente"
+            placeholderTextColor={colors.placeholder}
+            style={{ flex: 1, minHeight: 48, fontSize: 15, fontWeight: '600', color: colors.texto }}
+            returnKeyType="search"
+          />
+          {busqueda ? (
+            <Pressable onPress={() => setBusqueda('')} hitSlop={10} accessibilityLabel="Limpiar búsqueda">
+              <Icon nombre="cerrar" tamano={18} color={colors.textoSuave} />
+            </Pressable>
+          ) : null}
+        </View>
 
         {error ? <ErrorMsg titulo="No se pudieron cargar los cursos">{error}</ErrorMsg> : null}
 
@@ -103,20 +128,23 @@ export default function CursosScreen({ focused }) {
           <Loading />
         ) : cursos && cursos.length === 0 ? (
           <View style={s.tarjeta}>
-            <Vacio icono="birrete" titulo="Aun no tienes cursos" mensaje="Crea tu primer curso para empezar a registrar tareas.">
+            <Vacio icono="birrete" titulo="Aún no tienes cursos" mensaje="Crea tu primer curso para empezar a registrar tareas.">
               <Button title="Crear curso" icono="mas" onPress={() => setForm({})} />
             </Vacio>
           </View>
+        ) : filtrados.length === 0 && cursos ? (
+          <Vacio icono="buscar" titulo="Sin resultados" mensaje={`No hay cursos que coincidan con "${busqueda}".`} />
         ) : (
-          cursos?.map((c) => (
-            <CursoCard
-              key={c.id}
-              curso={c}
-              onVer={setDetalle}
-              onEditar={setForm}
-              onEliminar={confirmarBorrar}
-            />
-          ))
+          <View style={{ gap: 12 }}>
+            {filas.map((fila, i) => (
+              <View key={fila[0].id} style={{ flexDirection: 'row', gap: 12 }}>
+                {fila.map((c, j) => (
+                  <CursoTile key={c.id} curso={c} indice={i * 2 + j} onVer={setDetalle} />
+                ))}
+                {fila.length === 1 ? <View style={{ flex: 1 }} /> : null}
+              </View>
+            ))}
+          </View>
         )}
       </ScrollView>
 

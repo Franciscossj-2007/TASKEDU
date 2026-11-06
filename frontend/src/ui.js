@@ -3,67 +3,98 @@ import { ActivityIndicator, Alert, Modal, Platform, Pressable, ScrollView, Style
 import Animated from 'react-native-reanimated';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import Icon from './components/Icon';
-import Logo from './components/Logo';
+import Degradado from './components/Degradado';
+import MarcaTexto from './components/MarcaTexto';
 
-// Paleta azul de TaskEdu: azul de marca, celeste de acento y texto azul marino.
+// Paleta "Atardecer calido" de TaskEdu: crema, coral y naranja con texto cafe oscuro.
+// Se conservan los nombres de las claves para que todo el codigo existente siga funcionando.
 export const colors = {
-  primario: '#0b66f0',
-  primarioOscuro: '#0a4fc4',
-  primarioClaro: '#eaf2ff',
-  primarioBorde: '#c9dcff',
-  acento: '#5cc8ff',
-  fondo: '#f4f8ff',
+  primario: '#ff6b4a',
+  primarioOscuro: '#e04e2e',
+  primarioClaro: '#ffe8e0',
+  primarioBorde: '#ffd2c4',
+  acento: '#ffb020',
+  rosa: '#ff5470',
+  fondo: '#fff7f0',
+  hundido: '#f8ece2',
   superficie: '#ffffff',
-  tinta: '#0f2350',
-  texto: '#1a2b4c',
-  textoSuave: '#5d6b85',
-  placeholder: '#94a0b8',
-  borde: '#e1e8f5',
-  rojo: '#e11d48',
-  rojoClaro: '#ffe4e8',
-  rojoBorde: '#fecdd6',
-  verde: '#16a34a',
-  verdeClaro: '#dcfce7',
-  ambar: '#b45309',
-  ambarClaro: '#fef3c7',
-  azul: '#0b66f0',
-  azulClaro: '#dbe8ff',
-  gris: '#5d6b85',
-  grisClaro: '#eff3fa',
-  // Fondos azules (inicio, cabecera de acceso).
-  sidebar: '#0a4fd6',
-  sidebarTexto: '#e6f0ff',
-  sidebarEnlace: '#cfe0ff',
+  tinta: '#2b1a12',
+  texto: '#3d2a1f',
+  textoSuave: '#8a6f60',
+  placeholder: '#b8a294',
+  borde: '#f1e4d8',
+  rojo: '#e5383b',
+  rojoClaro: '#fde4e4',
+  rojoBorde: '#f9c5c6',
+  verde: '#2a9d8f',
+  verdeClaro: '#dcf3ef',
+  ambar: '#a16207',
+  ambarClaro: '#fef0d2',
+  azul: '#ff6b4a',
+  azulClaro: '#ffe8e0',
+  gris: '#8a6f60',
+  grisClaro: '#f5ece4',
+  // Fondos de marca (inicio y acceso).
+  sidebar: '#ff6b4a',
+  sidebarTexto: '#fff3ec',
+  sidebarEnlace: '#ffe3d6',
 };
 
-// Sombra suave con desplazamiento, la unica elevacion de las tarjetas.
+// Degradados por curso: cada curso toma uno segun su id (portadas, historias, mosaicos).
+export const GRADIENTES_CURSO = [
+  ['#ff5470', '#ff9f6e'],
+  ['#e0a100', '#ffcf6e'],
+  ['#7a2a48', '#e2725b'],
+  ['#5f7030', '#a7b85a'],
+  ['#ff8a5c', '#ffc49a'],
+  ['#c8553d', '#ffb020'],
+  ['#a23b5b', '#ff6b4a'],
+];
+export const gradienteCurso = (id) => GRADIENTES_CURSO[Math.abs(Number(id) || 0) % GRADIENTES_CURSO.length];
+
+// Iniciales de un nombre ("Fisica II" -> "FI", "Calculo" -> "CA").
+export function iniciales(nombre = '') {
+  const partes = nombre.trim().split(/\s+/).filter(Boolean);
+  if (partes.length === 0) return '?';
+  if (partes.length === 1) return partes[0].slice(0, 2).toUpperCase();
+  return (partes[0][0] + partes[1][0]).toUpperCase();
+}
+
+// Sombra suave y calida, la unica elevacion de las tarjetas.
 export const sombra = Platform.select({
-  ios: { shadowColor: '#0b3a8f', shadowOpacity: 0.07, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } },
+  ios: { shadowColor: '#8a4b2a', shadowOpacity: 0.08, shadowRadius: 14, shadowOffset: { width: 0, height: 6 } },
   android: { elevation: 2 },
-  default: { boxShadow: '0 4px 14px rgba(11, 58, 143, 0.07)' },
+  default: { boxShadow: '0 6px 16px rgba(138, 75, 42, 0.08)' },
+});
+
+// Sombra de color para botones y elementos con degradado.
+export const sombraCoral = Platform.select({
+  ios: { shadowColor: '#ff6b4a', shadowOpacity: 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 8 } },
+  android: { elevation: 5 },
+  default: { boxShadow: '0 8px 20px rgba(255, 107, 74, 0.35)' },
 });
 
 // Tonos por estado para tarjetas de estadistica e iconos: fondo de tarjeta, circulo e icono.
 export const TONOS = {
-  azul: { fondo: '#f2f7ff', borde: '#dce8ff', circulo: '#dbe8ff', icono: '#0b66f0' },
-  ambar: { fondo: '#fff9ef', borde: '#fdebc8', circulo: '#ffedc9', icono: '#e58a00' },
-  turquesa: { fondo: '#f0fbf9', borde: '#cdeee8', circulo: '#d2f3ec', icono: '#0d9488' },
-  verde: { fondo: '#f1fbf4', borde: '#cfeed9', circulo: '#d6f5e0', icono: '#16a34a' },
-  rojo: { fondo: '#fff4f5', borde: '#fcd5dc', circulo: '#ffe1e6', icono: '#e11d48' },
-  violeta: { fondo: '#f6f4ff', borde: '#e0dafd', circulo: '#e6e0ff', icono: '#6d4ee8' },
+  azul: { fondo: '#fff3ee', borde: '#ffd9cc', circulo: '#ffe2d7', icono: '#ff6b4a' },
+  ambar: { fondo: '#fff8ea', borde: '#fde7bd', circulo: '#ffefc9', icono: '#e09400' },
+  turquesa: { fondo: '#effaf8', borde: '#cdebe6', circulo: '#d6f2ed', icono: '#2a9d8f' },
+  verde: { fondo: '#effaf8', borde: '#cdebe6', circulo: '#d6f2ed', icono: '#2a9d8f' },
+  rojo: { fondo: '#fff3f3', borde: '#f9cfd0', circulo: '#fde0e0', icono: '#e5383b' },
+  violeta: { fondo: '#fbf0f4', borde: '#f0d2dd', circulo: '#f6dde6', icono: '#a23b5b' },
 };
 
 // Numeros de ancho fijo para conteos y fechas.
 const tabular = { fontVariant: ['tabular-nums'] };
 
-// Colores de badge (fondo claro + texto oscuro) como en el web.
+// Colores de badge (fondo claro + texto oscuro).
 export const BADGES = {
-  gris: { bg: '#eff3fa', fg: '#4a5875' },
-  azul: { bg: '#dbe8ff', fg: '#0a4fc4' },
-  verde: { bg: '#dcfce7', fg: '#15803d' },
-  rojo: { bg: '#ffe4e8', fg: '#be123c' },
-  ambar: { bg: '#fef3c7', fg: '#b45309' },
-  primario: { bg: '#eaf2ff', fg: '#0a4fc4' },
+  gris: { bg: '#f5ece4', fg: '#6b5547' },
+  azul: { bg: '#ffe8e0', fg: '#c2410c' },
+  verde: { bg: '#dcf3ef', fg: '#1f7a6f' },
+  rojo: { bg: '#fde4e4', fg: '#b42325' },
+  ambar: { bg: '#fef0d2', fg: '#a16207' },
+  primario: { bg: '#ffe8e0', fg: '#c2410c' },
 };
 
 export const ESTADOS = {
@@ -128,11 +159,37 @@ export function diasRestantes(valor) {
 export function etiquetaVencimiento(tarea) {
   const dias = diasRestantes(tarea.fecha_entrega);
   if (dias === null || tarea.estado === 'completada') return '';
-  if (dias < 0) return `Vencio hace ${Math.abs(dias)} d`;
+  if (dias < 0) return `Venció hace ${Math.abs(dias)} d`;
   if (dias === 0) return 'Vence hoy';
-  if (dias === 1) return 'Vence manana';
-  if (dias <= 7) return `Vence en ${dias} dias`;
+  if (dias === 1) return 'Vence mañana';
+  if (dias <= 7) return `Vence en ${dias} días`;
   return '';
+}
+
+// Tiempo que falta para la entrega en lenguaje corto: "Quedan 6 h", "Queda 1 dia", "Vencida".
+export function tiempoRestante(tarea) {
+  if (tarea.estado === 'completada') return 'Completada';
+  const f = new Date(tarea.fecha_entrega);
+  if (Number.isNaN(f.getTime())) return 'Sin fecha';
+  const ms = f.getTime() - Date.now();
+  if (ms < 0) return 'Vencida';
+  const horas = Math.floor(ms / 3600000);
+  if (horas < 1) return 'Menos de 1 h';
+  if (horas < 24) return `Quedan ${horas} h`;
+  const dias = Math.floor(horas / 24);
+  return dias === 1 ? 'Queda 1 día' : `Quedan ${dias} días`;
+}
+
+// Fecha corta para listas: "Hoy · 23:59", "Mañana · 18:00", "12 nov · 08:00".
+export function fechaCorta(valor) {
+  const f = new Date(valor);
+  if (Number.isNaN(f.getTime())) return 'Sin fecha';
+  const hora = `${p2(f.getHours())}:${p2(f.getMinutes())}`;
+  const dias = diasRestantes(valor);
+  if (dias === 0) return `Hoy · ${hora}`;
+  if (dias === 1) return `Mañana · ${hora}`;
+  if (dias === -1) return `Ayer · ${hora}`;
+  return `${f.getDate()} ${MESES[f.getMonth()]} · ${hora}`;
 }
 
 // Confirmacion de una accion destructiva. Alert.alert no muestra botones en la web,
@@ -148,20 +205,14 @@ export function confirmarEliminar(titulo, mensaje, onAceptar, textoBoton = 'Elim
   ]);
 }
 
-// Marca: isotipo + "Task" en azul marino y "Edu" en azul (o blanco + celeste sobre fondo azul).
+// Marca: logotipo de texto "taskedu" con el degradado Atardecer (o blanco sobre fondos de color).
 export function Marca({ grande, claro }) {
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-      <Logo tamano={grande ? 44 : 36} />
-      <Text style={{ fontWeight: '800', fontSize: grande ? 24 : 21, color: claro ? '#fff' : colors.tinta, letterSpacing: -0.6 }}>
-        Task<Text style={{ color: claro ? colors.acento : colors.primario }}>Edu</Text>
-      </Text>
-    </View>
-  );
+  return <MarcaTexto tamano={grande ? 40 : 28} blanco={claro} />;
 }
 
-export function Avatar({ nombre = '', tamano = 38 }) {
-  const iniciales = nombre
+// Avatar circular con degradado y las iniciales del nombre.
+export function Avatar({ nombre = '', tamano = 38, colores }) {
+  const letras = nombre
     .trim()
     .split(/\s+/)
     .slice(0, 2)
@@ -169,7 +220,20 @@ export function Avatar({ nombre = '', tamano = 38 }) {
     .join('');
   return (
     <View style={[s.avatar, { width: tamano, height: tamano, borderRadius: tamano / 2 }]}>
-      <Text style={{ color: colors.primarioOscuro, fontWeight: '700', fontSize: tamano / 2.6 }}>{iniciales}</Text>
+      <Degradado colores={colores} />
+      <Text style={{ color: '#fff', fontWeight: '800', fontSize: tamano / 2.7 }}>{letras}</Text>
+    </View>
+  );
+}
+
+// Anillo tipo "historia": borde con degradado, separacion color fondo y contenido dentro.
+export function AnilloHistoria({ tamano = 68, activo = true, grosor = 3, fondo = colors.fondo, children }) {
+  return (
+    <View style={{ width: tamano, height: tamano, borderRadius: tamano / 2, padding: grosor, overflow: 'hidden', backgroundColor: activo ? undefined : '#e6d6c8' }}>
+      {activo ? <Degradado /> : null}
+      <View style={{ flex: 1, borderRadius: tamano / 2, padding: grosor, backgroundColor: fondo }}>
+        <View style={{ flex: 1, borderRadius: tamano / 2, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>{children}</View>
+      </View>
     </View>
   );
 }
@@ -228,17 +292,19 @@ export function Button({ title, onPress, kind = 'primario', small, bloque, carga
       contenedor={bloque && { alignSelf: 'stretch' }}
       style={[
         s.btn,
-        kind === 'secundario' && { borderColor: colors.borde },
+        kind === 'secundario' && { borderColor: colors.borde, borderWidth: 1.5 },
         small && s.btnSm,
-        { backgroundColor: bg, opacity: disabled ? 0.5 : 1 },
+        { backgroundColor: kind === 'primario' ? colors.primario : bg, opacity: disabled ? 0.5 : 1 },
+        kind === 'primario' && !disabled && sombraCoral,
       ]}
     >
+      {kind === 'primario' ? <Degradado radio={small ? 12 : 16} /> : null}
       {cargando ? (
         <ActivityIndicator size="small" color={fg} />
       ) : (
         <>
           {icono ? <Icon nombre={icono} tamano={small ? 16 : 18} color={fg} /> : null}
-          <Text style={{ color: fg, fontWeight: '600', fontSize: small ? 13 : 15 }}>{title}</Text>
+          <Text style={{ color: fg, fontWeight: '700', fontSize: small ? 13 : 15 }}>{title}</Text>
         </>
       )}
     </Presionable>
@@ -360,13 +426,34 @@ export function SelectValor({ value, opciones, placeholder = 'Selecciona', onCha
   );
 }
 
-export function Chip({ label, active, onPress }) {
+// Pastilla de filtro: activa en cafe oscuro, inactiva blanca con borde. Admite un contador.
+export function Chip({ label, active, onPress, contador, alerta }) {
   return (
     <Pressable
       onPress={onPress}
-      style={[s.chip, active && { backgroundColor: colors.primario, borderColor: colors.primario }]}
+      accessibilityRole="button"
+      accessibilityState={{ selected: !!active }}
+      style={({ pressed }) => [
+        s.chip,
+        active && { backgroundColor: colors.tinta, borderColor: colors.tinta },
+        pressed && !active && { backgroundColor: colors.grisClaro },
+      ]}
     >
-      <Text style={{ color: active ? '#fff' : colors.texto, fontSize: 13, fontWeight: active ? '600' : '400' }}>{label}</Text>
+      <Text style={{ color: active ? '#fff' : colors.texto, fontSize: 13, fontWeight: '700' }}>{label}</Text>
+      {contador !== undefined && contador !== null ? (
+        <View
+          style={{
+            minWidth: 20,
+            paddingHorizontal: 6,
+            paddingVertical: 1,
+            borderRadius: 999,
+            alignItems: 'center',
+            backgroundColor: alerta ? colors.rojo : active ? 'rgba(255,255,255,0.2)' : colors.hundido,
+          }}
+        >
+          <Text style={[tabular, { fontSize: 11, fontWeight: '800', color: alerta || active ? '#fff' : colors.textoSuave }]}>{contador}</Text>
+        </View>
+      ) : null}
     </Pressable>
   );
 }
@@ -395,12 +482,15 @@ export function Progreso({ valor, max, color = 'primario' }) {
           bottom: 0,
           borderRadius: 999,
           width: `${porcentaje}%`,
+          overflow: 'hidden',
           backgroundColor: color === 'verde' ? colors.verde : colors.primario,
           transitionProperty: 'width',
-          transitionDuration: 300,
+          transitionDuration: 600,
           transitionTimingFunction: 'ease-out',
         }}
-      />
+      >
+        {color === 'verde' ? null : <Degradado horizontal />}
+      </Animated.View>
     </View>
   );
 }
@@ -415,7 +505,7 @@ export const Loading = () => (
 export function ErrorMsg({ titulo, children, tipo = 'error' }) {
   if (!children) return null;
   const info = tipo === 'info';
-  const fg = info ? '#1e40af' : '#991b1b';
+  const fg = info ? '#9a3412' : '#991b1b';
   return (
     <View
       accessibilityRole="alert"
@@ -423,7 +513,7 @@ export function ErrorMsg({ titulo, children, tipo = 'error' }) {
         s.alerta,
         {
           backgroundColor: info ? colors.azulClaro : colors.rojoClaro,
-          borderColor: info ? '#bfdbfe' : colors.rojoBorde,
+          borderColor: info ? colors.primarioBorde : colors.rojoBorde,
         },
       ]}
     >
@@ -499,15 +589,14 @@ export const s = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: colors.primarioClaro,
-    borderWidth: 1,
-    borderColor: colors.primarioBorde,
+    overflow: 'hidden',
+    backgroundColor: colors.primario,
     alignItems: 'center',
     justifyContent: 'center',
   },
   tarjeta: {
     backgroundColor: colors.superficie,
-    borderRadius: 18,
+    borderRadius: 22,
     borderWidth: 1,
     borderColor: colors.borde,
     padding: 18,
@@ -524,12 +613,13 @@ export const s = StyleSheet.create({
     gap: 8,
     borderWidth: 1,
     borderColor: 'transparent',
-    borderRadius: 10,
-    minHeight: 44,
+    borderRadius: 16,
+    overflow: 'hidden',
+    minHeight: 48,
     paddingVertical: 10,
     paddingHorizontal: 16,
   },
-  btnSm: { minHeight: 36, paddingVertical: 7, paddingHorizontal: 12, borderRadius: 9, gap: 6 },
+  btnSm: { minHeight: 38, paddingVertical: 7, paddingHorizontal: 14, borderRadius: 12, gap: 6 },
   botonIcono: {
     width: 40,
     height: 40,
@@ -545,8 +635,8 @@ export const s = StyleSheet.create({
     minHeight: 46,
     borderWidth: 1,
     borderColor: colors.borde,
-    borderRadius: 10,
-    paddingVertical: 11,
+    borderRadius: 14,
+    paddingVertical: 12,
     paddingHorizontal: 14,
     fontSize: 15,
     backgroundColor: '#fff',
@@ -554,7 +644,7 @@ export const s = StyleSheet.create({
   },
   entradaEnfocada: {
     borderColor: colors.primario,
-    backgroundColor: '#fcfcff',
+    backgroundColor: '#fffaf7',
   },
   selectCompacto: {
     minHeight: 36,
@@ -568,7 +658,7 @@ export const s = StyleSheet.create({
   },
   modalVelado: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    backgroundColor: 'rgba(43, 26, 18, 0.45)',
     justifyContent: 'center',
     paddingHorizontal: 24,
   },
@@ -599,8 +689,11 @@ export const s = StyleSheet.create({
     paddingHorizontal: 18,
   },
   chip: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: colors.borde,
@@ -634,9 +727,9 @@ export const s = StyleSheet.create({
     marginBottom: 16,
   },
   vacioIcono: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
+    width: 64,
+    height: 64,
+    borderRadius: 22,
     backgroundColor: colors.primarioClaro,
     alignItems: 'center',
     justifyContent: 'center',
@@ -655,8 +748,8 @@ export const s = StyleSheet.create({
   },
   campanaPunto: {
     position: 'absolute',
-    top: 9,
-    right: 10,
+    top: -2,
+    right: -3,
     width: 10,
     height: 10,
     borderRadius: 5,
@@ -666,9 +759,10 @@ export const s = StyleSheet.create({
   },
   tabbar: {
     flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: colors.superficie,
-    paddingTop: 8,
-    paddingHorizontal: 10,
+    paddingTop: 10,
+    paddingHorizontal: 14,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.borde,
   },

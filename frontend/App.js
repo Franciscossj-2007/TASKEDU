@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from './src/auth';
-import { Avatar, Loading, Marca, colors, confirmarEliminar, s } from './src/ui';
+import { AnilloHistoria, Avatar, Loading, colors, confirmarEliminar, s, sombraCoral } from './src/ui';
 import Icon from './src/components/Icon';
+import Degradado from './src/components/Degradado';
 import AuthScreen from './src/screens/AuthScreen';
 import SplashScreen from './src/screens/SplashScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
@@ -12,15 +13,34 @@ import TareasScreen from './src/screens/TareasScreen';
 import CursosScreen from './src/screens/CursosScreen';
 
 const TABS = [
-  { key: 'panel', label: 'Panel', icono: 'panel', Screen: DashboardScreen },
-  { key: 'tareas', label: 'Tareas', icono: 'tareas', Screen: TareasScreen },
-  { key: 'cursos', label: 'Cursos', icono: 'birrete', Screen: CursosScreen },
+  { key: 'panel', label: 'Inicio', icono: 'inicio', Screen: DashboardScreen },
+  { key: 'cursos', label: 'Cursos', icono: 'libroAbierto', Screen: CursosScreen },
+  { key: 'tareas', label: 'Tareas', icono: 'listaCheck', Screen: TareasScreen },
 ];
+
+// Boton de una pestana: icono (mas grueso y oscuro si esta activa) y un punto coral debajo.
+function BotonTab({ activa, etiqueta, onPress, children }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="tab"
+      accessibilityLabel={etiqueta}
+      accessibilityState={{ selected: activa }}
+      style={({ pressed }) => [s.tab, pressed && { opacity: 0.6 }]}
+    >
+      <View style={{ alignItems: 'center', gap: 5, minHeight: 44, justifyContent: 'center' }}>
+        {children}
+        <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: activa ? colors.primario : 'transparent' }} />
+      </View>
+    </Pressable>
+  );
+}
 
 function Main() {
   const { usuario, cargando, logout } = useAuth();
   const [tab, setTab] = useState('panel');
-  // Tareas vencidas segun el ultimo resumen del panel; enciende el punto de la campana.
+  // Cada vez que se toca "+" se incrementa; la pantalla de tareas abre el formulario.
+  const [pedirNueva, setPedirNueva] = useState(0);
   const [vencidas, setVencidas] = useState(0);
   const insets = useSafeAreaInsets();
 
@@ -28,90 +48,76 @@ function Main() {
   if (!usuario) return <AuthScreen />;
 
   const confirmarSalir = () =>
-    confirmarEliminar('Cerrar sesion', `Sesion iniciada como ${usuario.nombre} (${usuario.correo}). Deseas cerrar sesion?`, logout, 'Cerrar sesion');
+    confirmarEliminar('Cerrar sesión', `Sesión iniciada como ${usuario.nombre} (${usuario.correo}). ¿Deseas cerrar sesión?`, logout, 'Cerrar sesión');
+
+  const nuevaTarea = () => {
+    setTab('tareas');
+    setPedirNueva((n) => n + 1);
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.fondo }}>
-      {/* Cabecera blanca con marca, avatar (cerrar sesion) y campana de vencidas */}
-      <SafeAreaView edges={['top']} style={{ backgroundColor: colors.superficie }}>
-        <View style={s.header}>
-          <Marca />
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Pressable
-              onPress={confirmarSalir}
-              hitSlop={4}
-              accessibilityRole="button"
-              accessibilityLabel={`Cuenta de ${usuario.nombre}. Cerrar sesion`}
-              style={({ pressed }) => pressed && { opacity: 0.7 }}
-            >
-              <Avatar nombre={usuario.nombre} tamano={42} />
-            </Pressable>
-            <Pressable
-              onPress={() => setTab('tareas')}
-              hitSlop={4}
-              accessibilityRole="button"
-              accessibilityLabel={vencidas ? `${vencidas} tareas vencidas. Ver tareas` : 'Ver tareas'}
-              style={({ pressed }) => [s.botonIcono, { width: 44, height: 44 }, pressed && { backgroundColor: colors.grisClaro }]}
-            >
-              <Icon nombre="campana" tamano={23} color={colors.tinta} />
-              {vencidas ? <View style={s.campanaPunto} /> : null}
-            </Pressable>
-          </View>
-        </View>
-      </SafeAreaView>
+      <SafeAreaView edges={['top']} style={{ backgroundColor: colors.fondo }} />
 
       <View style={{ flex: 1 }}>
-        {/* Todas las pestañas permanecen montadas; "focused" indica cual esta activa. */}
+        {/* Todas las pestañas permanecen montadas; "focused" indica cuál está activa. */}
         {TABS.map(({ key, Screen }) => (
           <View key={key} style={{ flex: 1, display: tab === key ? 'flex' : 'none' }}>
             <Screen
               focused={tab === key}
+              pedirNueva={key === 'tareas' ? pedirNueva : undefined}
+              vencidas={vencidas}
               onIrATareas={() => setTab('tareas')}
               onIrACursos={() => setTab('cursos')}
+              onNuevaTarea={nuevaTarea}
               onResumen={(r) => setVencidas(Number(r.vencidas) || 0)}
             />
           </View>
         ))}
       </View>
 
-      {/* Barra inferior blanca; la pestaña activa lleva una pastilla celeste. */}
-      <View style={[s.tabbar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-        {TABS.map(({ key, label, icono }) => {
-          const activa = tab === key;
-          const color = activa ? colors.primario : colors.textoSuave;
-          return (
-            <Pressable
-              key={key}
-              onPress={() => setTab(key)}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: activa }}
-              style={s.tab}
-            >
-              <View style={[s.tabPastilla, activa && s.tabPastillaActiva]}>
-                <Icon nombre={icono} tamano={22} color={color} relleno={activa && key === 'panel'} />
-                <Text style={{ fontSize: 13, fontWeight: activa ? '700' : '500', color }}>{label}</Text>
-              </View>
-            </Pressable>
-          );
-        })}
+      {/* Barra inferior: Inicio, Cursos, crear (+), Tareas y la foto del perfil (cerrar sesión). */}
+      <View style={[s.tabbar, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+        {TABS.slice(0, 2).map(({ key, label, icono }) => (
+          <BotonTab key={key} activa={tab === key} etiqueta={label} onPress={() => setTab(key)}>
+            <Icon nombre={icono} tamano={26} color={tab === key ? colors.tinta : colors.placeholder} grosor={tab === key ? 2.4 : 2} />
+          </BotonTab>
+        ))}
+        <BotonTab activa={false} etiqueta="Nueva tarea" onPress={nuevaTarea}>
+          <View style={[{ width: 50, height: 36, borderRadius: 13, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }, sombraCoral]}>
+            <Degradado radio={13} />
+            <Icon nombre="mas" tamano={22} color="#fff" grosor={2.8} />
+          </View>
+        </BotonTab>
+        {TABS.slice(2).map(({ key, label, icono }) => (
+          <BotonTab key={key} activa={tab === key} etiqueta={label} onPress={() => setTab(key)}>
+            <View>
+              <Icon nombre={icono} tamano={26} color={tab === key ? colors.tinta : colors.placeholder} grosor={tab === key ? 2.4 : 2} />
+              {vencidas ? <View style={s.campanaPunto} /> : null}
+            </View>
+          </BotonTab>
+        ))}
+        <BotonTab activa={false} etiqueta={`Cuenta de ${usuario.nombre}. Cerrar sesión`} onPress={confirmarSalir}>
+          <AnilloHistoria tamano={32} grosor={1.5} fondo={colors.superficie}>
+            <Avatar nombre={usuario.nombre} tamano={26} />
+          </AnilloHistoria>
+        </BotonTab>
       </View>
     </View>
   );
 }
 
-// Muestra la pantalla de inicio con el logo encima de la app hasta que la
-// sesion termina de restaurarse; despues la retira para revelar el panel.
+// Muestra la pantalla de inicio encima de la app hasta que la sesión termina
+// de restaurarse; después la retira para revelar el contenido.
 function Arranque() {
-  const { cargando, usuario } = useAuth();
+  const { cargando } = useAuth();
   const [splashVisible, setSplashVisible] = useState(true);
-  // Barra de estado clara sobre fondos indigo (inicio y acceso), oscura sobre la app.
-  const barraClara = splashVisible || !usuario;
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.sidebar }}>
+    <View style={{ flex: 1, backgroundColor: colors.fondo }}>
       <Main />
       {splashVisible ? <SplashScreen listo={!cargando} onFin={() => setSplashVisible(false)} /> : null}
-      <StatusBar style={barraClara ? 'light' : 'dark'} />
+      <StatusBar style={splashVisible ? 'light' : 'dark'} />
     </View>
   );
 }
