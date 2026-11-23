@@ -15,6 +15,13 @@ import {
   s,
 } from '../../ui';
 
+const NIVEL_POR_DEFECTO = 'superior';
+const NIVELES_ACADEMICOS = [
+  { valor: 'primaria', etiqueta: 'Primaria' },
+  { valor: 'secundaria', etiqueta: 'Secundaria' },
+  { valor: 'superior', etiqueta: 'Educación superior' },
+];
+
 function FilaPregunta({ pregunta, indice, activa, onPress }) {
   return (
     <Pressable
@@ -57,6 +64,7 @@ export default function TutorAcademico({ dosColumnas, focused }) {
   const [cargandoCursos, setCargandoCursos] = useState(true);
   const [errorCursos, setErrorCursos] = useState('');
   const [curso, setCurso] = useState('');
+  const [nivel, setNivel] = useState(NIVEL_POR_DEFECTO);
   const [tema, setTema] = useState('');
   const [temasSugeridos, setTemasSugeridos] = useState([]);
   const [preguntas, setPreguntas] = useState([]);
@@ -121,9 +129,12 @@ export default function TutorAcademico({ dosColumnas, focused }) {
     };
   }, [curso, focused]);
 
-  const generarPreguntas = useCallback(async (temaObjetivo, cursoObjetivo) => {
+  const generarPreguntas = useCallback(async (temaObjetivo, cursoObjetivo, nivelObjetivo = NIVEL_POR_DEFECTO) => {
     const limpio = String(temaObjetivo || '').trim();
     const cursoId = Number(cursoObjetivo);
+    const nivelElegido = NIVELES_ACADEMICOS.some((opcion) => opcion.valor === nivelObjetivo)
+      ? nivelObjetivo
+      : NIVEL_POR_DEFECTO;
     if (!cursoId || limpio.length < 3) return;
 
     const solicitud = solicitudPreguntas.current + 1;
@@ -137,7 +148,7 @@ export default function TutorAcademico({ dosColumnas, focused }) {
     setDuda('');
 
     try {
-      const res = await iaApi.preguntas({ curso_id: cursoId, tema: limpio });
+      const res = await iaApi.preguntas({ curso_id: cursoId, tema: limpio, nivel: nivelElegido });
       if (solicitud !== solicitudPreguntas.current) return;
       setPreguntas(res.preguntas ?? []);
     } catch (e) {
@@ -151,10 +162,13 @@ export default function TutorAcademico({ dosColumnas, focused }) {
   const temaActual = tema.trim() || 'el tema seleccionado';
   const opcionesCursos = cursos.map((item) => ({ valor: String(item.id), etiqueta: item.nombre }));
 
-  function cambiarCurso(valor) {
-    setCurso(valor);
-    setTema('');
-    setTemasSugeridos([]);
+  function descartarResultados() {
+    solicitudPreguntas.current += 1;
+    solicitudRespuesta.current += 1;
+    solicitudDuda.current += 1;
+    setGenerando(false);
+    setCargandoRespuesta(false);
+    setCargandoDuda(false);
     setPreguntas([]);
     setSeleccionada(null);
     setRespuesta(null);
@@ -163,13 +177,21 @@ export default function TutorAcademico({ dosColumnas, focused }) {
     setError('');
   }
 
+  function cambiarCurso(valor) {
+    setCurso(valor);
+    setTema('');
+    setTemasSugeridos([]);
+    descartarResultados();
+  }
+
   function cambiarTema(texto) {
     setTema(texto);
-    setPreguntas([]);
-    setSeleccionada(null);
-    setRespuesta(null);
-    setRespuestaDuda('');
-    setError('');
+    descartarResultados();
+  }
+
+  function cambiarNivel(valor) {
+    setNivel(valor);
+    descartarResultados();
   }
 
   async function seleccionarPregunta(pregunta) {
@@ -188,6 +210,7 @@ export default function TutorAcademico({ dosColumnas, focused }) {
         curso_id: Number(curso),
         tema: tema.trim(),
         pregunta: pregunta.texto,
+        nivel,
       });
       if (solicitud === solicitudRespuesta.current) setRespuesta(res);
     } catch (e) {
@@ -211,6 +234,7 @@ export default function TutorAcademico({ dosColumnas, focused }) {
         tema: tema.trim(),
         duda: duda.trim(),
         pregunta: seleccionada?.texto,
+        nivel,
       });
       if (solicitud === solicitudDuda.current) setRespuestaDuda(res.respuesta ?? '');
     } catch (e) {
@@ -267,7 +291,7 @@ export default function TutorAcademico({ dosColumnas, focused }) {
               <View style={{ flex: 1 }}>
                 <Text style={[s.seccionTitulo, { fontSize: 18 }]}>Configura tu tutor</Text>
                 <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textoSuave, marginTop: 2 }}>
-                  Elige un curso y un tema de estudio
+                  Elige un curso, el nivel y un tema de estudio
                 </Text>
               </View>
             </View>
@@ -278,6 +302,13 @@ export default function TutorAcademico({ dosColumnas, focused }) {
               opciones={opcionesCursos}
               onChange={cambiarCurso}
               placeholder="Selecciona un curso"
+              requerido
+            />
+            <SelectCampo
+              label="Nivel académico"
+              value={nivel}
+              opciones={NIVELES_ACADEMICOS}
+              onChange={cambiarNivel}
               requerido
             />
             <Field
@@ -312,7 +343,7 @@ export default function TutorAcademico({ dosColumnas, focused }) {
               icono="chispa"
               bloque
               cargando={generando}
-              onPress={() => generarPreguntas(tema, curso)}
+              onPress={() => generarPreguntas(tema, curso, nivel)}
               disabled={!curso || tema.trim().length < 3}
             />
 

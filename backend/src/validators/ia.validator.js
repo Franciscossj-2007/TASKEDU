@@ -23,6 +23,12 @@ const duda = z
   .min(3, 'La duda debe tener al menos 3 caracteres')
   .max(1000, 'La duda es demasiado larga');
 
+const nivel = z
+  .enum(['primaria', 'secundaria', 'superior'], {
+    errorMap: () => ({ message: 'El nivel académico no es válido' }),
+  })
+  .default('superior');
+
 export const organizadorSchema = z
   .object({
     enfoque: z.string().trim().max(300, 'El enfoque es demasiado largo').optional(),
@@ -33,12 +39,14 @@ export const organizadorSchema = z
 export const preguntasTutorSchema = z.object({
   curso_id: cursoId,
   tema,
+  nivel,
 });
 
 export const responderTutorSchema = z.object({
   curso_id: cursoId,
   tema,
   pregunta,
+  nivel,
 });
 
 export const dudaTutorSchema = z.object({
@@ -46,4 +54,5 @@ export const dudaTutorSchema = z.object({
   tema,
   duda,
   pregunta: pregunta.optional(),
+  nivel,
 });
