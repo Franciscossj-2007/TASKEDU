@@ -6,9 +6,14 @@ const CACHE_MODELO_MS = 10 * 60 * 1000;
 const CACHE_ERROR_MS = 60 * 1000;
 const CACHE_ERROR_TEMPORAL_MS = 15 * 1000;
 
-// Un solo reintento por operación: evita duplicar consumo y latencia en móvil.
-const MAX_REINTENTOS = 1;
+// Presupuesto total por operación: principal + respaldo (o un reintento).
+// Nunca más de dos llamadas HTTP para no duplicar consumo ni latencia en móvil.
+const MAX_INTENTOS = 2;
 const ESPERA_REINTENTO_MS = 400;
+
+// ID real y estable documentado por Google: admite generateContent y salida JSON.
+const MODELO_RESPALDO_POR_DEFECTO = 'gemini-3.1-flash-lite';
+const PATRON_MODELO = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
 // Aun si el .env trae un valor mayor, cada intento queda acotado.
 const TIMEOUT_MIN_MS = 5000;
@@ -18,9 +23,45 @@ const TIMEOUT_VERIFICACION_MS = 8000;
 const ESTADOS_TEMPORALES = new Set([408, 500, 502, 503, 504]);
 
 let cacheModelo = { valor: null, expira: 0 };
+let avisoRespaldoInvalido = false;
 
 export function configurado() {
   return Boolean(env.ia.apiKey);
+}
+
+function modeloValido(valor) {
+  const limpio = String(valor ?? '').trim();
+  return PATRON_MODELO.test(limpio) ? limpio : null;
+}
+
+/**
+ * Modelo secundario. Si la variable no existe se usa un ID documentado;
+ * si está vacía se desactiva; si es inválida se ignora sin registrarla.
+ */
+function modeloRespaldo() {
+  const configurado = process.env.GEMINI_FALLBACK_MODEL;
+  if (configurado === undefined) return MODELO_RESPALDO_POR_DEFECTO;
+
+  const limpio = String(configurado).trim();
+  if (!limpio) return null;
+
+  const valido = modeloValido(limpio);
+  if (valido) return valido;
+
+  if (!avisoRespaldoInvalido) {
+    registrar('warn', 'config', 'respaldo-invalido');
+    avisoRespaldoInvalido = true;
+  }
+  return null;
+}
+
+function esFallo503(error) {
+  return error?.codigo === 'SERVICIO_NO_DISPONIBLE' && error?.estadoRemoto === 503;
+}
+
+/** Solo un 503 del modelo principal autoriza el cambio de modelo. */
+function permiteRespaldo(error) {
+  return esFallo503(error);
 }
 
 function timeoutEfectivo(valor = env.ia.timeoutMs) {
@@ -175,8 +216,8 @@ function acumularUso(acumulado, uso) {
 }
 
 /**
- * Un único intento HTTP. El reintento se decide en `conReintento` para que
- * transporte y JSON inválido compartan el mismo presupuesto (máximo 1).
+ * Un único intento HTTP. El cambio de modelo o el reintento se deciden en
+ * `ejecutarConRespaldo` para que transporte y JSON inválido compartan presupuesto.
  */
 async function solicitar(ruta, { method = 'GET', body, timeoutMs } = {}) {
   if (!configurado()) {
@@ -246,46 +287,108 @@ async function esperar(ms) {
   await new Promise((resolver) => setTimeout(resolver, ms));
 }
 
-async function conReintento(operacion, accion, { nivelFallo = 'error' } = {}) {
-  for (let intento = 0; intento <= MAX_REINTENTOS; intento += 1) {
+/**
+ * Ejecuta una operación con un presupuesto máximo de dos llamadas HTTP:
+ * - 503 del principal → un único intento con el respaldo.
+ * - Otros fallos temporales o JSON inválido → un reintento en el mismo modelo.
+ * - 429, credenciales inválidas o modelo no disponible → sin respaldo.
+ *
+ * Los registros indican el rol del modelo (principal/respaldo), nunca claves,
+ * prompts ni datos del estudiante.
+ */
+async function ejecutarConRespaldo(
+  operacion,
+  accion,
+  { usarRespaldo = true, nivelFallo = 'error', rolModelo = 'principal', modelo = env.ia.model } = {},
+) {
+  const respaldo = usarRespaldo ? modeloRespaldo() : null;
+  const planes = [{ modelo, rol: rolModelo }];
+
+  if (respaldo && respaldo !== modelo) {
+    planes.push({ modelo: respaldo, rol: 'respaldo' });
+  }
+
+  let intentos = 0;
+  let indicePlan = 0;
+  let usoRespaldo = false;
+  let ultimoError = null;
+
+  while (intentos < MAX_INTENTOS && indicePlan < planes.length) {
+    const plan = planes[indicePlan];
+
     try {
-      const resultado = await accion(intento);
-      if (intento > 0) registrar('info', operacion, 'recuperado', { intento: intento + 1 });
+      const resultado = await accion(plan.modelo);
+      if (plan.rol === 'respaldo') {
+        registrar('info', operacion, 'recuperado', {
+          modelo: plan.rol,
+          codigo: ultimoError?.codigo ?? 'desconocido',
+        });
+      } else if (intentos > 1) {
+        registrar('info', operacion, 'recuperado', { modelo: plan.rol, intento: intentos });
+      }
       return resultado;
     } catch (error) {
+      ultimoError = error;
+      intentos += 1;
+
       const campos = {
-        intento: intento + 1,
+        intento: intentos,
+        modelo: plan.rol,
         codigo: error?.codigo ?? 'desconocido',
         ...(error?.estadoRemoto ? { estado: error.estadoRemoto } : {}),
       };
-      const puedeReintentar = intento < MAX_REINTENTOS && debeReintentar(error);
 
-      if (!puedeReintentar) {
-        registrar(nivelFallo, operacion, 'fallo', campos);
-        throw error;
+      const puedeRespalzar =
+        usarRespaldo &&
+        !usoRespaldo &&
+        planes.length > 1 &&
+        permiteRespaldo(error) &&
+        intentos < MAX_INTENTOS;
+
+      if (puedeRespalzar) {
+        registrar('warn', operacion, 'respaldando', campos);
+        usoRespaldo = true;
+        indicePlan += 1;
+        await esperar(ESPERA_REINTENTO_MS);
+        continue;
       }
 
-      registrar('warn', operacion, 'reintentando', campos);
-      await esperar(ESPERA_REINTENTO_MS * (intento + 1));
+      const puedeReintentar =
+        !usoRespaldo && intentos < MAX_INTENTOS && !esFallo503(error) && debeReintentar(error);
+
+      if (puedeReintentar) {
+        registrar('warn', operacion, 'reintentando', campos);
+        await esperar(ESPERA_REINTENTO_MS * intentos);
+        continue;
+      }
+
+      registrar(nivelFallo, operacion, 'fallo', campos);
+      throw error;
     }
   }
 
-  throw ApiError.badGateway('La IA no pudo completar la solicitud');
+  throw ultimoError ?? ApiError.badGateway('La IA no pudo completar la solicitud');
 }
 
-export async function verificarModelo() {
+/**
+ * Verifica que un modelo acepte `generateContent`. Se usa bajo demanda para
+ * comprobar tanto el principal como el respaldo; la generación normal no llama
+ * a este endpoint para no añadir latencia ni un 503 extra.
+ */
+export async function verificarModelo(modelo = env.ia.model) {
   if (!configurado()) {
     return { disponible: false, motivo: 'GEMINI_API_KEY no está configurada', temporal: false };
   }
 
-  if (cacheModelo.valor && Date.now() < cacheModelo.expira) {
+  const esPrincipal = modelo === env.ia.model;
+  if (esPrincipal && cacheModelo.valor && Date.now() < cacheModelo.expira) {
     return cacheModelo.valor;
   }
 
-  const valor = await conReintento(
+  const valor = await ejecutarConRespaldo(
     'verificar-modelo',
-    async () => {
-      const datos = await solicitar(`/models/${encodeURIComponent(env.ia.model)}`, {
+    async (modeloUsado) => {
+      const datos = await solicitar(`/models/${encodeURIComponent(modeloUsado)}`, {
         timeoutMs: Math.min(timeoutEfectivo(), TIMEOUT_VERIFICACION_MS),
       });
       const metodos = datos?.supportedGenerationMethods;
@@ -297,7 +400,12 @@ export async function verificarModelo() {
       }
       return { disponible: true, motivo: null, temporal: false };
     },
-    { nivelFallo: 'warn' },
+    {
+      usarRespaldo: false,
+      nivelFallo: 'warn',
+      rolModelo: esPrincipal ? 'principal' : 'respaldo',
+      modelo,
+    },
   ).catch((error) => ({
     disponible: false,
     motivo: error?.message || 'No se pudo verificar el modelo de IA',
@@ -305,8 +413,10 @@ export async function verificarModelo() {
   }));
 
   // Un fallo temporal no debe dejar el modo básico "pegado" durante un minuto.
-  const ttl = valor.temporal ? CACHE_ERROR_TEMPORAL_MS : CACHE_ERROR_MS;
-  cacheModelo = { valor, expira: Date.now() + ttl };
+  if (esPrincipal) {
+    const ttl = valor.temporal ? CACHE_ERROR_TEMPORAL_MS : CACHE_ERROR_MS;
+    cacheModelo = { valor, expira: Date.now() + ttl };
+  }
   return valor;
 }
 
@@ -322,8 +432,8 @@ export async function generarJson({
   // No se llama a verificarModelo(): ese endpoint añadía latencia, consumo y
   // podía bloquear la generación por un 503 temporal. La respuesta de
   // generateContent es la fuente de verdad.
-  const datos = await conReintento(operacion, async () => {
-    const respuesta = await solicitar(`/models/${encodeURIComponent(env.ia.model)}:generateContent`, {
+  const datos = await ejecutarConRespaldo(operacion, async (modelo) => {
+    const respuesta = await solicitar(`/models/${encodeURIComponent(modelo)}:generateContent`, {
       method: 'POST',
       body: {
         systemInstruction: { parts: [{ text: sistema }] },
