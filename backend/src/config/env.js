@@ -38,7 +38,8 @@ export const env = {
   ia: {
     apiKey: process.env.GEMINI_API_KEY || '',
     model: process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite',
-    timeoutMs: Number(process.env.GEMINI_TIMEOUT_MS) || 25000,
+    // Tiempo de espera por intento (el servicio lo acota entre 5 y 20 s y admite 1 reintento).
+    timeoutMs: Number(process.env.GEMINI_TIMEOUT_MS) || 15000,
     maxTareas: Math.min(Number(process.env.IA_MAX_TAREAS) || 60, 100),
     limitePorMinuto: Number(process.env.IA_MAX_REQUESTS_PER_MINUTE) || 10,
     limitePorDia: Number(process.env.IA_MAX_REQUESTS_PER_DAY) || 60,

@@ -50,6 +50,23 @@ function contextoNivel(nivel) {
   return `Nivel académico: ${config.etiqueta}. ${config.guia}`;
 }
 
+/**
+ * Aviso para el organizador: se usan los mensajes controlados del servicio de
+ * IA (nunca texto del proveedor) y se indican las opciones que tiene el usuario.
+ */
+function avisoBasico(error) {
+  const motivo = error instanceof ApiError ? error.message : 'La IA no está disponible en este momento';
+  return `${motivo} Se muestra el organizador básico.`;
+}
+
+/** Registro operativo sin identificadores, tareas ni contenido del prompt. */
+function registrarFallback(error) {
+  if (env.nodeEnv === 'test') return;
+  const codigo = error?.codigo ?? 'desconocido';
+  const estado = error?.status ?? '-';
+  console.warn(`[IA] organizador: modo basico codigo=${codigo} estado=${estado}`);
+}
+
 function inicioDelDia(fecha) {
   return new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate());
 }
@@ -318,7 +335,7 @@ export async function organizador(usuarioId, { enfoque } = {}) {
   if (!gemini.configurado()) {
     return {
       ...basico,
-      aviso: 'Gemini no esta configurado. Se muestra el organizador basico.',
+      aviso: 'Gemini no está configurado en el servidor. Se muestra el organizador básico.',
     };
   }
 
@@ -353,9 +370,10 @@ export async function organizador(usuarioId, { enfoque } = {}) {
       aviso: null,
     };
   } catch (error) {
+    registrarFallback(error);
     return {
       ...basico,
-      aviso: error.message || 'La IA no esta disponible. Se muestra el organizador basico.',
+      aviso: avisoBasico(error),
     };
   }
 }
@@ -387,7 +405,7 @@ export async function preguntasTutor(usuarioId, { curso_id, tema, nivel = NIVEL_
   const unicas = normalizarPreguntasTutor(datos);
 
   if (unicas.length !== CANTIDAD_PREGUNTAS) {
-    throw ApiError.badGateway('La IA no genero cinco preguntas breves y diferentes. Intenta de nuevo');
+    throw ApiError.badGateway('Gemini no generó cinco preguntas breves y diferentes. Intenta de nuevo');
   }
 
   return {
@@ -417,7 +435,7 @@ export async function responderTutor(usuarioId, { curso_id, tema, pregunta, nive
   const ideaClave = String(datos?.idea_clave || '').trim().slice(0, 600);
 
   if (!respuesta) {
-    throw ApiError.badGateway('La IA no devolvio una explicacion valida');
+    throw ApiError.badGateway('Gemini no devolvió una explicación válida. Intenta de nuevo');
   }
 
   return { fuente: 'gemini', respuesta, ideaClave };
@@ -443,7 +461,7 @@ export async function responderDuda(usuarioId, { curso_id, tema, duda, pregunta,
 
   const respuesta = String(datos?.respuesta || '').trim().slice(0, 3000);
   if (!respuesta) {
-    throw ApiError.badGateway('La IA no devolvio una respuesta valida');
+    throw ApiError.badGateway('Gemini no devolvió una respuesta válida. Intenta de nuevo');
   }
 
   return { fuente: 'gemini', respuesta };
