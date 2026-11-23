@@ -118,7 +118,7 @@ export default function OrganizadorAcademico({ dosColumnas, focused }) {
       <View style={[s.tarjeta, { marginBottom: 0 }]}>
         <Loading />
         <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textoSuave, textAlign: 'center' }}>
-          Analizando tus tareas con apoyo inteligente...
+          Preparando tu plan de estudio...
         </Text>
       </View>
     );
@@ -140,7 +140,7 @@ export default function OrganizadorAcademico({ dosColumnas, focused }) {
     <View style={{ gap: 14 }}>
       {error ? <ErrorMsg titulo="No se pudo actualizar el plan">{error}</ErrorMsg> : null}
       {datos?.aviso ? (
-        <ErrorMsg tipo="info" titulo={esGemini ? 'Aviso de la IA' : 'Organizador basico'}>
+        <ErrorMsg tipo="info" titulo={esGemini ? 'Aviso de la IA' : 'Modo básico del organizador'}>
           {datos.aviso}
         </ErrorMsg>
       ) : null}
@@ -168,7 +168,7 @@ export default function OrganizadorAcademico({ dosColumnas, focused }) {
                 </Text>
               </View>
               <Badge color={esGemini ? 'verde' : 'ambar'}>
-                {esGemini ? 'Gemini' : 'Modo basico'}
+                {esGemini ? 'Gemini' : 'Modo básico'}
               </Badge>
             </View>
 
@@ -182,13 +182,20 @@ export default function OrganizadorAcademico({ dosColumnas, focused }) {
               <Text style={{ fontSize: 11, fontWeight: '800', color: colors.primario }}>{avance} de 100</Text>
             </View>
 
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14 }}>
-              <Text style={{ flex: 1, fontSize: 11, lineHeight: 16, color: colors.textoSuave }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
+              <Text style={{ flex: 1, minWidth: 190, fontSize: 11, lineHeight: 16, color: colors.textoSuave }}>
                 {esGemini
                   ? 'Plan generado con tus tareas reales.'
-                  : 'Plan generado localmente. La IA no estaba disponible.'}
+                  : 'Plan básico con tus tareas reales, ordenadas por urgencia y fecha de entrega.'}
               </Text>
-              <Button kind="secundario" small title="Actualizar plan" icono="rayo" onPress={cargar} cargando={cargando} />
+              <Button
+                kind="secundario"
+                small
+                title={esGemini ? 'Actualizar plan' : 'Reintentar con Gemini'}
+                icono="rayo"
+                onPress={cargar}
+                cargando={cargando}
+              />
             </View>
           </View>
 

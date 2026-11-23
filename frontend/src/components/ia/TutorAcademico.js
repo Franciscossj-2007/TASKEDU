@@ -59,6 +59,35 @@ function FilaPregunta({ pregunta, indice, activa, onPress }) {
   );
 }
 
+function TarjetaManual({ tarjeta, onEliminar }) {
+  const [mostrarRespuesta, setMostrarRespuesta] = useState(false);
+
+  return (
+    <View style={{ padding: 12, borderRadius: 16, backgroundColor: colors.hundido, gap: 8 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
+        <Text style={{ flex: 1, fontSize: 13, fontWeight: '800', lineHeight: 19, color: colors.tinta }}>
+          {tarjeta.pregunta}
+        </Text>
+        <Badge color="gris">Manual</Badge>
+      </View>
+      <Text style={{ fontSize: 11, color: colors.textoSuave }}>{tarjeta.tema} · {tarjeta.curso}</Text>
+      {mostrarRespuesta ? (
+        <Text style={{ fontSize: 13, lineHeight: 19, color: colors.texto }}>{tarjeta.respuesta}</Text>
+      ) : null}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        <Button
+          kind="suave"
+          small
+          title={mostrarRespuesta ? 'Ocultar respuesta' : 'Ver respuesta'}
+          icono={mostrarRespuesta ? 'ojoCerrado' : 'ojo'}
+          onPress={() => setMostrarRespuesta((valor) => !valor)}
+        />
+        <Button kind="fantasma" small title="Eliminar" icono="borrar" onPress={() => onEliminar(tarjeta.id)} />
+      </View>
+    </View>
+  );
+}
+
 export default function TutorAcademico({ dosColumnas, focused }) {
   const [cursos, setCursos] = useState([]);
   const [cargandoCursos, setCargandoCursos] = useState(true);
@@ -76,6 +105,12 @@ export default function TutorAcademico({ dosColumnas, focused }) {
   const [cargandoDuda, setCargandoDuda] = useState(false);
   const [generando, setGenerando] = useState(false);
   const [error, setError] = useState('');
+  const [fuente, setFuente] = useState(null);
+  const [avisoBasico, setAvisoBasico] = useState('');
+  const [tarjetas, setTarjetas] = useState([]);
+  const [tarjetaPregunta, setTarjetaPregunta] = useState('');
+  const [tarjetaRespuesta, setTarjetaRespuesta] = useState('');
+  const [errorTarjeta, setErrorTarjeta] = useState('');
   const solicitudPreguntas = useRef(0);
   const solicitudRespuesta = useRef(0);
   const solicitudDuda = useRef(0);
@@ -141,16 +176,25 @@ export default function TutorAcademico({ dosColumnas, focused }) {
     solicitudPreguntas.current = solicitud;
     setGenerando(true);
     setError('');
+    setFuente(null);
+    setAvisoBasico('');
     setPreguntas([]);
     setSeleccionada(null);
     setRespuesta(null);
     setRespuestaDuda('');
     setDuda('');
+    setTarjetaPregunta('');
 
     try {
       const res = await iaApi.preguntas({ curso_id: cursoId, tema: limpio, nivel: nivelElegido });
       if (solicitud !== solicitudPreguntas.current) return;
       setPreguntas(res.preguntas ?? []);
+      setFuente(res.fuente === 'basico' ? 'basico' : 'gemini');
+      setAvisoBasico(
+        res.fuente === 'basico'
+          ? res.aviso || 'Gemini no está disponible. Estas guías no son respuestas generadas por IA.'
+          : '',
+      );
     } catch (e) {
       if (solicitud === solicitudPreguntas.current) setError(mensajeError(e));
     } finally {
@@ -161,6 +205,7 @@ export default function TutorAcademico({ dosColumnas, focused }) {
   const cursoActual = cursos.find((item) => String(item.id) === String(curso))?.nombre ?? '';
   const temaActual = tema.trim() || 'el tema seleccionado';
   const opcionesCursos = cursos.map((item) => ({ valor: String(item.id), etiqueta: item.nombre }));
+  const modoBasico = fuente === 'basico';
 
   function descartarResultados() {
     solicitudPreguntas.current += 1;
@@ -175,6 +220,43 @@ export default function TutorAcademico({ dosColumnas, focused }) {
     setRespuestaDuda('');
     setDuda('');
     setError('');
+    setFuente(null);
+    setAvisoBasico('');
+    setTarjetaPregunta('');
+    setTarjetaRespuesta('');
+    setErrorTarjeta('');
+  }
+
+  function reintentarGemini() {
+    descartarResultados();
+    generarPreguntas(tema, curso, nivel);
+  }
+
+  function guardarTarjeta() {
+    const preguntaLimpia = tarjetaPregunta.trim();
+    const respuestaLimpia = tarjetaRespuesta.trim();
+    if (!preguntaLimpia || !respuestaLimpia) {
+      setErrorTarjeta('Escribe la pregunta y tu propia respuesta para guardar la tarjeta.');
+      return;
+    }
+
+    setTarjetas((actual) => [
+      {
+        id: `tarjeta-${Date.now()}-${actual.length}`,
+        pregunta: preguntaLimpia,
+        respuesta: respuestaLimpia,
+        tema: tema.trim() || 'Tema sin nombre',
+        curso: cursoActual || 'Curso',
+      },
+      ...actual,
+    ]);
+    setTarjetaPregunta('');
+    setTarjetaRespuesta('');
+    setErrorTarjeta('');
+  }
+
+  function eliminarTarjeta(id) {
+    setTarjetas((actual) => actual.filter((tarjeta) => tarjeta.id !== id));
   }
 
   function cambiarCurso(valor) {
@@ -196,6 +278,16 @@ export default function TutorAcademico({ dosColumnas, focused }) {
 
   async function seleccionarPregunta(pregunta) {
     if (!curso) return;
+
+    if (modoBasico) {
+      // No hay respuesta de IA en modo básico: la guía se usa como enunciado de una tarjeta propia.
+      setSeleccionada(pregunta);
+      setRespuesta(null);
+      setRespuestaDuda('');
+      setTarjetaPregunta(pregunta.texto);
+      setError('');
+      return;
+    }
 
     const solicitud = solicitudRespuesta.current + 1;
     solicitudRespuesta.current = solicitud;
@@ -222,6 +314,11 @@ export default function TutorAcademico({ dosColumnas, focused }) {
 
   async function enviarDuda() {
     if (!curso || !duda.trim()) return;
+
+    if (modoBasico) {
+      setError('La pregunta libre necesita Gemini. Reintenta con Gemini o guarda tu propia respuesta como tarjeta.');
+      return;
+    }
 
     const solicitud = solicitudDuda.current + 1;
     solicitudDuda.current = solicitud;
@@ -271,6 +368,11 @@ export default function TutorAcademico({ dosColumnas, focused }) {
     <View style={{ gap: 14 }}>
       {errorCursos ? <ErrorMsg titulo="No se pudieron cargar los cursos">{errorCursos}</ErrorMsg> : null}
       {error ? <ErrorMsg titulo="No se pudo completar la consulta">{error}</ErrorMsg> : null}
+      {modoBasico ? (
+        <ErrorMsg tipo="info" titulo="Modo básico del tutor">
+          {avisoBasico || 'Gemini no está disponible. Estas guías no son respuestas generadas por IA.'}
+        </ErrorMsg>
+      ) : null}
 
       <View style={{ flexDirection: dosColumnas ? 'row' : 'column', alignItems: 'flex-start', gap: 14 }}>
         <View style={{ width: dosColumnas ? undefined : '100%', flex: dosColumnas ? 0.9 : undefined, gap: 14 }}>
@@ -317,7 +419,7 @@ export default function TutorAcademico({ dosColumnas, focused }) {
               value={tema}
               onChangeText={cambiarTema}
               placeholder="Escribe un tema del curso"
-              ayuda="Las preguntas se generan solo al pulsar el botón."
+              ayuda="Las preguntas se solicitan solo al pulsar el botón."
             />
 
             {temasSugeridos.length ? (
@@ -347,6 +449,21 @@ export default function TutorAcademico({ dosColumnas, focused }) {
               disabled={!curso || tema.trim().length < 3}
             />
 
+            {modoBasico ? (
+              <View style={{ marginTop: 10 }}>
+                <Button
+                  kind="secundario"
+                  small
+                  bloque
+                  title={generando ? 'Reintentando con Gemini' : 'Reintentar con Gemini'}
+                  icono="rayo"
+                  cargando={generando}
+                  onPress={reintentarGemini}
+                  disabled={!curso || tema.trim().length < 3}
+                />
+              </View>
+            ) : null}
+
             <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginTop: 12 }}>
               <Icon nombre="candado" tamano={15} color={colors.textoSuave} />
               <Text style={{ flex: 1, fontSize: 11, lineHeight: 16, color: colors.textoSuave }}>
@@ -370,14 +487,19 @@ export default function TutorAcademico({ dosColumnas, focused }) {
               multiline
             />
             <Button
-              title={cargandoDuda ? 'Consultando' : 'Preguntar'}
+              title={modoBasico ? 'Consulta disponible con Gemini' : cargandoDuda ? 'Consultando' : 'Preguntar'}
               icono="flecha"
               kind="secundario"
               small
               cargando={cargandoDuda}
               onPress={enviarDuda}
-              disabled={!curso || !duda.trim()}
+              disabled={!curso || !duda.trim() || modoBasico}
             />
+            {modoBasico ? (
+              <Text style={{ fontSize: 11, lineHeight: 16, color: colors.textoSuave, marginTop: 8 }}>
+                La pregunta libre necesita Gemini. Usa «Reintentar con Gemini» o escribe tu propia respuesta en una tarjeta.
+              </Text>
+            ) : null}
             {respuestaDuda ? (
               <View style={{ marginTop: 12, padding: 12, borderRadius: 14, backgroundColor: colors.hundido }}>
                 <Text style={{ fontSize: 12, fontWeight: '800', color: colors.tinta, marginBottom: 4 }}>
@@ -393,10 +515,14 @@ export default function TutorAcademico({ dosColumnas, focused }) {
           <View style={[s.tarjeta, { marginBottom: 0 }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
               <Text style={[s.seccionTitulo, { flex: 1, fontSize: 17 }]}>Preguntas sugeridas</Text>
-              {cursoActual ? <Badge color="primario">{cursoActual}</Badge> : null}
+              <Badge color={modoBasico ? 'ambar' : 'primario'}>
+                {modoBasico ? 'Guías · modo básico' : cursoActual || 'Gemini'}
+              </Badge>
             </View>
             <Text style={{ fontSize: 12, lineHeight: 17, color: colors.textoSuave, marginBottom: 12 }}>
-              Selecciona una pregunta para ver la explicación del tutor sobre {temaActual}.
+              {modoBasico
+                ? `Preguntas guía breves sobre ${temaActual}. No son generadas por IA ni incluyen respuestas.`
+                : `Selecciona una pregunta para ver la explicación del tutor sobre ${temaActual}.`}
             </Text>
 
             {generando ? (
@@ -419,7 +545,7 @@ export default function TutorAcademico({ dosColumnas, focused }) {
                   </View>
                 ))}
                 <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textoSuave, textAlign: 'center' }}>
-                  Preparando preguntas con Gemini...
+                  Preparando preguntas...
                 </Text>
               </View>
             ) : preguntas.length === 0 ? (
@@ -441,7 +567,7 @@ export default function TutorAcademico({ dosColumnas, focused }) {
                   Genera preguntas para este tema
                 </Text>
                 <Text style={{ fontSize: 12, lineHeight: 17, color: colors.textoSuave, textAlign: 'center' }}>
-                  Escribe un tema de al menos 3 caracteres y el tutor preparará cinco preguntas.
+                  Escribe un tema de al menos 3 caracteres y el tutor preparará cinco preguntas o guías breves.
                 </Text>
               </View>
             ) : (
@@ -459,7 +585,55 @@ export default function TutorAcademico({ dosColumnas, focused }) {
             )}
           </View>
 
-          {seleccionada ? (
+          <View style={[s.tarjeta, { marginBottom: 0 }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <Icon nombre="libroAbierto" tamano={19} color={colors.primario} />
+              <Text style={[s.seccionTitulo, { flex: 1, fontSize: 17 }]}>Tarjetas de estudio manuales</Text>
+              <Badge color="gris">Solo tuyas</Badge>
+            </View>
+            <Text style={{ fontSize: 12, lineHeight: 17, color: colors.textoSuave, marginBottom: 12 }}>
+              Escribe con tus palabras la pregunta y la respuesta. No se generan con IA y solo viven en esta sesión.
+            </Text>
+            <Field
+              label="Pregunta de la tarjeta"
+              value={tarjetaPregunta}
+              onChangeText={setTarjetaPregunta}
+              placeholder="Ej.: ¿Qué debo recordar del tema?"
+              multiline
+            />
+            <Field
+              label="Tu respuesta"
+              value={tarjetaRespuesta}
+              onChangeText={setTarjetaRespuesta}
+              placeholder="Escribe tu propia respuesta"
+              multiline
+            />
+            {errorTarjeta ? <ErrorMsg titulo="Revisa la tarjeta">{errorTarjeta}</ErrorMsg> : null}
+            <Button
+              title="Guardar tarjeta"
+              icono="mas"
+              kind="suave"
+              bloque
+              onPress={guardarTarjeta}
+              disabled={!tarjetaPregunta.trim() || !tarjetaRespuesta.trim()}
+            />
+            {tarjetas.length ? (
+              <View style={{ marginTop: 14, gap: 10 }}>
+                <Text style={{ fontSize: 12, fontWeight: '800', color: colors.textoSuave }}>
+                  Tus tarjetas ({tarjetas.length})
+                </Text>
+                {tarjetas.map((tarjeta) => (
+                  <TarjetaManual key={tarjeta.id} tarjeta={tarjeta} onEliminar={eliminarTarjeta} />
+                ))}
+              </View>
+            ) : (
+              <Text style={{ fontSize: 11, lineHeight: 16, color: colors.textoSuave, marginTop: 10 }}>
+                Todavía no guardas tarjetas. Puedes empezar con una pregunta guía.
+              </Text>
+            )}
+          </View>
+
+          {seleccionada && !modoBasico ? (
             <View style={[s.tarjeta, { marginBottom: 0 }]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 }}>
                 <View

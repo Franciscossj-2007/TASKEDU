@@ -28,6 +28,26 @@ const tarea = {
   vencida: false,
 };
 
+const tareaVencida = {
+  id: 2,
+  titulo: 'Informe de laboratorio',
+  curso_nombre: 'Física',
+  fecha_entrega: new Date(Date.now() - 86400000).toISOString(),
+  prioridad: 'media',
+  estado: 'pendiente',
+  vencida: true,
+};
+
+const tareaEnProgreso = {
+  id: 3,
+  titulo: 'Resumen de biología',
+  curso_nombre: 'Biología',
+  fecha_entrega: new Date(Date.now() + 2 * 86400000).toISOString(),
+  prioridad: 'baja',
+  estado: 'en_progreso',
+  vencida: false,
+};
+
 const curso = { id: 1, nombre: 'Matemáticas' };
 
 mock.module(rutaModulo('src/repositories/cursos.repository.js'), {
@@ -39,14 +59,16 @@ mock.module(rutaModulo('src/repositories/cursos.repository.js'), {
 mock.module(rutaModulo('src/repositories/tareas.repository.js'), {
   exports: {
     estadisticas: async () => ({
-      pendientes: 1,
-      en_progreso: 0,
+      pendientes: 2,
+      en_progreso: 1,
       completadas: 1,
-      total: 2,
-      vencidas: 0,
-      proximas: 1,
+      total: 4,
+      vencidas: 1,
+      proximas: 2,
     }),
-    listar: async () => ({ datos: [tarea] }),
+    listar: async (_usuarioId, opciones = {}) => ({
+      datos: opciones.estado === 'en_progreso' ? [tareaEnProgreso] : [tarea, tareaVencida],
+    }),
   },
 });
 
@@ -181,7 +203,10 @@ test('Organizador usa el respaldo ante un 503 del principal', async () => {
     fallo503(),
     exito({
       resumen: 'Organiza la entrega de mañana primero.',
-      plan: [{ tarea_id: 1, motivo: 'Entrega próxima' }],
+      plan: [
+        { tarea_id: 1, motivo: 'Entrega próxima' },
+        { tarea_id: 3, motivo: 'Continúa donde quedaste' },
+      ],
       recomendaciones: ['Reserva 30 minutos para repasar.'],
     }),
   ]);
@@ -208,5 +233,60 @@ test('Organizador vuelve al modo básico si ambos modelos fallan', async () => {
   assert.deepEqual(
     solicitudes.map((solicitud) => solicitud.modelo),
     [MODELO_PRINCIPAL, MODELO_RESPALDO],
+  );
+});
+
+test('Organizador básico ordena tareas reales por urgencia y fecha de entrega', async () => {
+  simularFetch([fallo503(), fallo503()]);
+
+  const resultado = await ia.organizador(1);
+
+  assert.equal(resultado.fuente, 'basico');
+  assert.deepEqual(
+    resultado.plan.map((item) => item.id),
+    [tareaVencida.id, tarea.id, tareaEnProgreso.id],
+  );
+  assert.equal(resultado.plan[0].motivo, 'Entrega vencida: conviene resolverla primero');
+  assert.ok(resultado.plan.every((item) => typeof item.titulo === 'string' && item.titulo.length));
+});
+
+test('Tutor entrega preguntas guía del tema en modo básico sin inventar respuestas', async () => {
+  const solicitudes = simularFetch([fallo503(), fallo503()]);
+
+  const resultado = await ia.preguntasTutor(1, {
+    curso_id: 1,
+    tema: 'funciones trigonométricas',
+    nivel: 'superior',
+  });
+
+  assert.equal(resultado.fuente, 'basico');
+  assert.equal(resultado.modoBasico, true);
+  assert.equal(resultado.esGeneradoPorIA, false);
+  assert.match(resultado.aviso, /preguntas guía/);
+  assert.match(resultado.aviso, /no son respuestas generadas por IA/);
+  assert.equal(resultado.preguntas.length, 5);
+  for (const pregunta of resultado.preguntas) {
+    assert.match(pregunta.texto, /funciones trigonométricas/);
+    assert.ok(pregunta.texto.split(/\s+/).filter(Boolean).length <= 15);
+    assert.equal(pregunta.respuesta, undefined);
+  }
+  // Solo los dos intentos controlados de Gemini: no hay reintentos automáticos extra.
+  assert.deepEqual(
+    solicitudes.map((solicitud) => solicitud.modelo),
+    [MODELO_PRINCIPAL, MODELO_RESPALDO],
+  );
+});
+
+test('Tutor mantiene el nivel elegido en las preguntas guía del modo básico', async () => {
+  simularFetch([fallo503(), fallo503()]);
+
+  const primaria = await ia.preguntasTutor(1, { curso_id: 1, tema: 'las plantas', nivel: 'primaria' });
+  const superior = await ia.preguntasTutor(1, { curso_id: 1, tema: 'las plantas', nivel: 'superior' });
+
+  assert.equal(primaria.nivel, 'primaria');
+  assert.equal(superior.nivel, 'superior');
+  assert.notDeepEqual(
+    primaria.preguntas.map((pregunta) => pregunta.texto),
+    superior.preguntas.map((pregunta) => pregunta.texto),
   );
 });

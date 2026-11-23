@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import Icon from '../components/Icon';
 import OrganizadorAcademico from '../components/ia/OrganizadorAcademico';
 import TutorAcademico from '../components/ia/TutorAcademico';
 import { iaApi } from '../api';
-import { Badge, EncabezadoPagina, colors } from '../ui';
+import { Badge, Button, EncabezadoPagina, colors } from '../ui';
 
 function BotonSeccion({ activo, icono, titulo, descripcion, onPress }) {
   return (
@@ -60,24 +60,26 @@ export default function IAScreen({ focused }) {
   const dosColumnas = width >= 900;
   const [seccion, setSeccion] = useState('organizador');
   const [estadoIa, setEstadoIa] = useState(null);
+  const [verificando, setVerificando] = useState(false);
+  const estadoSolicitado = useRef(false);
 
+  const verificarEstado = useCallback(async () => {
+    setVerificando(true);
+    try {
+      setEstadoIa(await iaApi.estado());
+    } catch {
+      setEstadoIa({ disponible: false });
+    } finally {
+      setVerificando(false);
+    }
+  }, []);
+
+  // Una sola consulta automática al entrar. Los reintentos siempre son manuales.
   useEffect(() => {
-    let activo = true;
-    if (!focused) return () => { activo = false; };
-
-    iaApi
-      .estado()
-      .then((datos) => {
-        if (activo) setEstadoIa(datos);
-      })
-      .catch(() => {
-        if (activo) setEstadoIa({ disponible: false });
-      });
-
-    return () => {
-      activo = false;
-    };
-  }, [focused]);
+    if (!focused || estadoSolicitado.current) return;
+    estadoSolicitado.current = true;
+    verificarEstado();
+  }, [focused, verificarEstado]);
 
   const iaDisponible = Boolean(estadoIa?.disponible);
 
@@ -94,7 +96,7 @@ export default function IAScreen({ focused }) {
         >
           {estadoIa ? (
             <Badge color={iaDisponible ? 'verde' : 'ambar'}>
-              {iaDisponible ? 'IA conectada' : 'Modo basico'}
+              {iaDisponible ? 'IA conectada' : 'Modo básico'}
             </Badge>
           ) : (
             <Badge color="primario">IA Academica</Badge>
@@ -143,15 +145,25 @@ export default function IAScreen({ focused }) {
           >
             <Icon nombre="rayo" tamano={18} color="#e09400" />
           </View>
-          <View style={{ flex: 1 }}>
+          <View style={{ flex: 1, gap: 8 }}>
             <Text style={{ fontSize: 13, fontWeight: '800', color: '#7c4a03' }}>
-              {iaDisponible ? 'Asistente conectado' : 'Asistente en modo basico'}
+              {iaDisponible ? 'Asistente conectado' : 'Asistente en modo básico'}
             </Text>
             <Text style={{ fontSize: 12, lineHeight: 17, color: '#9a6a12' }}>
               {iaDisponible
                 ? 'La IA consulta solo tus cursos y tareas. Las preguntas y respuestas no se guardan.'
-                : 'Gemini no esta disponible en este momento. El organizador usara el plan basico y el tutor puede fallar.'}
+                : 'Gemini no está disponible. El organizador usa tus tareas reales y el tutor ofrece preguntas guía y tarjetas manuales.'}
             </Text>
+            {estadoIa && !iaDisponible ? (
+              <Button
+                kind="secundario"
+                small
+                title={verificando ? 'Verificando' : 'Reintentar Gemini'}
+                icono="rayo"
+                cargando={verificando}
+                onPress={verificarEstado}
+              />
+            ) : null}
           </View>
         </View>
 
