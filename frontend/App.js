@@ -11,11 +11,13 @@ import SplashScreen from './src/screens/SplashScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
 import TareasScreen from './src/screens/TareasScreen';
 import CursosScreen from './src/screens/CursosScreen';
+import IAScreen from './src/screens/IAScreen';
 
 const TABS = [
   { key: 'panel', label: 'Inicio', icono: 'inicio', Screen: DashboardScreen },
   { key: 'cursos', label: 'Cursos', icono: 'libroAbierto', Screen: CursosScreen },
   { key: 'tareas', label: 'Tareas', icono: 'listaCheck', Screen: TareasScreen },
+  { key: 'ia', label: 'IA Académica', icono: 'chispa', Screen: IAScreen },
 ];
 
 // Boton de una pestana: icono (mas grueso y oscuro si esta activa) y un punto coral debajo.

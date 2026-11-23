@@ -34,4 +34,19 @@ export const env = {
   },
   // Origen del frontend autorizado por CORS ('*' = cualquiera).
   corsOrigin: process.env.CORS_ORIGIN || '*',
+  // Configuracion del asistente academico con Gemini. La clave solo existe en el backend.
+  ia: {
+    apiKey: process.env.GEMINI_API_KEY || '',
+    model: process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite',
+    timeoutMs: Number(process.env.GEMINI_TIMEOUT_MS) || 25000,
+    maxTareas: Math.min(Number(process.env.IA_MAX_TAREAS) || 60, 100),
+    limitePorMinuto: Number(process.env.IA_MAX_REQUESTS_PER_MINUTE) || 10,
+    limitePorDia: Number(process.env.IA_MAX_REQUESTS_PER_DAY) || 60,
+    maxTokens: {
+      organizador: Number(process.env.IA_MAX_TOKENS_ORGANIZADOR) || 1400,
+      preguntas: Number(process.env.IA_MAX_TOKENS_PREGUNTAS) || 700,
+      respuesta: Number(process.env.IA_MAX_TOKENS_RESPUESTA) || 800,
+      duda: Number(process.env.IA_MAX_TOKENS_DUDA) || 700,
+    },
+  },
 };

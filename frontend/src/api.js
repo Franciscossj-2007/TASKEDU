@@ -104,3 +104,11 @@ export const tareasApi = {
 };
 
 export const dashboardApi = { resumen: () => request('/dashboard/resumen') };
+
+export const iaApi = {
+  estado: () => request('/ia/estado'),
+  organizador: (b = {}) => request('/ia/organizador', { method: 'POST', body: b }),
+  preguntas: (b) => request('/ia/tutor/preguntas', { method: 'POST', body: b }),
+  responder: (b) => request('/ia/tutor/responder', { method: 'POST', body: b }),
+  duda: (b) => request('/ia/tutor/duda', { method: 'POST', body: b }),
+};

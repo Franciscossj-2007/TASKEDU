@@ -4,6 +4,7 @@ import authRoutes from './auth.routes.js';
 import cursosRoutes from './cursos.routes.js';
 import tareasRoutes from './tareas.routes.js';
 import dashboardRoutes from './dashboard.routes.js';
+import iaRoutes from './ia.routes.js';
 import { testConnection } from '../config/database.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
@@ -23,5 +24,6 @@ router.use('/auth', authRoutes);
 router.use('/cursos', cursosRoutes);
 router.use('/tareas', tareasRoutes);
 router.use('/dashboard', dashboardRoutes);
+router.use('/ia', iaRoutes);
 
 export default router;

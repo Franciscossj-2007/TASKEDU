@@ -34,4 +34,24 @@ export class ApiError extends Error {
   static conflict(message, details) {
     return new ApiError(409, message, details);
   }
+
+  // 429: demasiadas solicitudes en poco tiempo.
+  static tooManyRequests(message = 'Demasiadas solicitudes. Intenta de nuevo mas tarde') {
+    return new ApiError(429, message);
+  }
+
+  // 502: un servicio externo respondio con un error.
+  static badGateway(message = 'El servicio externo no respondio correctamente') {
+    return new ApiError(502, message);
+  }
+
+  // 503: el servicio no esta disponible o no esta configurado.
+  static serviceUnavailable(message = 'Servicio no disponible') {
+    return new ApiError(503, message);
+  }
+
+  // 504: el servicio externo excedio el tiempo de espera.
+  static gatewayTimeout(message = 'El servicio externo tardo demasiado en responder') {
+    return new ApiError(504, message);
+  }
 }
